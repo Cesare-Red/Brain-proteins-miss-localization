@@ -1,0 +1,25 @@
+﻿# ── Embedding e pesi modello (rigenerabili, troppo pesanti) ──
+data/res_esm2_t33_650M_UR50D/
+data/emb_esm2_t33_650M_UR50D*.npy
+**/*.npy
+**/*.npz
+**/*.pt
+
+# ── Cache scaricabili da sorgenti esterne ──
+cache/hpa_rna_single_cell.zip
+cache/hpa_rna_tissue.zip
+cache/hpa_rna_tissue_consensus.zip
+cache/hpa_subcellular.zip
+cache/uniprot_human.tsv
+cache/uniprot_human_v4.tsv
+cache/clinvar_variant_summary.txt.gz
+cache/*.html.part
+
+# ── Bytecode Python ──
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ── Notebook checkpoints ──
+.ipynb_checkpoints/
