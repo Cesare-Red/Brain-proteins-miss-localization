@@ -24,15 +24,13 @@ Questo progetto costruisce una pipeline end-to-end che:
 ## Struttura della repository
 
 ```
-Brain-miss-localization/
+Brain-proteins-miss-localization/
 │
-├── Try-01/
-│   ├── 01_dati_cervello_umano.ipynb   # Pipeline dati: download, preprocessing, etichette
-│   └── 02_modeling.ipynb              # Architettura MM-CAN-SubCell, training, valutazione
-│
-├── Documentazione/
-│   ├── schema_01_dati.html            # Schema interattivo workflow dati
-│   └── schema_02_modeling.html        # Schema interattivo workflow modeling
+├── try_01/
+│   ├── 01_data_brain.ipynb                              # Pipeline dati: download, preprocessing, etichette
+│   ├── 02_modeling.ipynb                                # Architettura MM-CAN-SubCell, training, valutazione
+│   ├── schema-workflow-01-dati-cervello-umano.html      # Schema interattivo workflow dati
+│   └── schema-workflow-02-modeling-mm-can-subcell.html  # Schema interattivo workflow modeling
 │
 ├── data/                              # Generata da 01_dati (non inclusa nel repo)
 │   ├── proteine.parquet               # Coorte cerebrale + feature + card_protein
@@ -70,7 +68,7 @@ Il notebook costruisce la coorte cerebrale umana a partire da zero, scaricando e
 
 ### Schema interattivo
 
-> 📊 **[Apri lo schema completo del workflow dati](Documentazione/schema_01_dati.html)**
+> 📊 **[Apri lo schema completo del workflow dati](try_01/schema-workflow-01-dati-cervello-umano.html)**
 >
 > Lo schema illustra tutti gli 11 step del notebook: configurazione, download fonti, costruzione osservazioni multi-fonte, GOA sperimentale, funnel dei filtri, feature AlphaFold, `card_protein` e salvataggio.
 
@@ -171,7 +169,7 @@ Il notebook addestra **MM-CAN-SubCell** e lo confronta con quattro baseline.
 
 ### Schema interattivo
 
-> 📊 **[Apri lo schema completo del workflow di modeling](Documentazione/schema_02_modeling.html)**
+> 📊 **[Apri lo schema completo del workflow di modeling](try_01/schema-workflow-02-modeling-mm-can-subcell.html)**
 >
 > Lo schema illustra i 10 step del notebook: setup, soft labels, embedding multi-modali, architettura MM-CAN-SubCell, training, 5-fold CV, confronto baseline, figure ROC, UMAP e output predittivo.
 
@@ -312,7 +310,7 @@ Prima di avviare il notebook 01, scaricare manualmente:
 ### Step 2 — Pipeline dati
 
 ```bash
-jupyter notebook Try-01/01_dati_cervello_umano.ipynb
+jupyter notebook try_01/01_data_brain.ipynb
 ```
 
 Eseguire tutte le celle in ordine. Il notebook scarica automaticamente tutte le altre fonti, calcola le feature AlphaFold (alcune ore la prima volta, poi cache), costruisce le `card_protein` e salva i file Parquet in `data/`.
@@ -320,7 +318,7 @@ Eseguire tutte le celle in ordine. Il notebook scarica automaticamente tutte le 
 ### Step 3 — Modeling
 
 ```bash
-jupyter notebook Try-01/02_modeling.ipynb
+jupyter notebook try_01/02_modeling.ipynb
 ```
 
 Eseguire tutte le celle in ordine. Gli embedding ESM-2 e BioLinkBERT vengono calcolati la prima volta e salvati in `data/embeddings/` per i run successivi.
