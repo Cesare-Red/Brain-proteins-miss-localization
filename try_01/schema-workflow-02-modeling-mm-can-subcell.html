@@ -1,0 +1,451 @@
+
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<title>02 · Modeling — MM-CAN-SubCell</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    background: #f7f8fa;
+    color: #1f2328;
+    padding: 28px 20px 40px;
+  }
+  h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .subtitle { font-size: 12.5px; color: #57606a; margin-bottom: 28px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 330px;
+    gap: 24px;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
+  .flow { display: flex; flex-direction: column; gap: 0; }
+
+  .step { display: flex; align-items: stretch; position: relative; }
+  .step-left { display: flex; flex-direction: column; align-items: center; width: 44px; flex-shrink: 0; }
+  .step-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; z-index: 1;
+  }
+  .step-line { width: 2px; flex: 1; background: #d8dde6; margin-top: 4px; }
+  .step:last-child .step-line { display: none; }
+  .step-body { flex: 1; padding: 0 0 20px 12px; }
+  .step-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
+  .step-box {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+  }
+  .step-box p { margin-bottom: 4px; }
+  .step-box p:last-child { margin-bottom: 0; }
+
+  .tag {
+    display: inline-block; padding: 1px 7px; border-radius: 10px;
+    font-size: 10.5px; font-weight: 600; margin-right: 4px; margin-bottom: 3px;
+  }
+  .tag-blue  { background: #dbeafe; color: #1e40af; }
+  .tag-green { background: #d1fae5; color: #065f46; }
+  .tag-amber { background: #fef3c7; color: #92400e; }
+  .tag-red   { background: #fee2e2; color: #991b1b; }
+  .tag-purple{ background: #ede9fe; color: #5b21b6; }
+  .tag-gray  { background: #f3f4f6; color: #374151; }
+  .tag-teal  { background: #ccfbf1; color: #134e4a; }
+  .tag-dark  { background: #374151; color: #fff; }
+
+  .c0 { background:#374151; }
+  .c1 { background:#3b82d4; }
+  .c2 { background:#0ea5e9; }
+  .c3 { background:#7c5cd8; }
+  .c4 { background:#10b981; }
+  .c5 { background:#f59e0b; }
+  .c6 { background:#ef4444; }
+  .c7 { background:#ef4444; }
+  .c8 { background:#6366f1; }
+  .c9 { background:#ec4899; }
+  .c10{ background:#374151; }
+
+  .arch-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    margin: 8px 0;
+  }
+  .arch-box {
+    border: 1px solid #e5e7eb;
+    border-radius: 6px;
+    padding: 6px 8px;
+    text-align: center;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+  .arch-box.blue  { background:#eff6ff; border-color:#bfdbfe; }
+  .arch-box.orange{ background:#fff7ed; border-color:#fed7aa; }
+  .arch-box.purple{ background:#faf5ff; border-color:#e9d5ff; }
+  .arch-box.gray  { background:#f9fafb; border-color:#e5e7eb; }
+
+  .arrow-row {
+    display: flex; justify-content: space-around; margin: 4px 0;
+    font-size: 16px; color: #6b7280;
+  }
+
+  .fusion-box {
+    background: #f0fdf4;
+    border: 2px solid #86efac;
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 11.5px;
+    margin: 4px 0;
+    font-weight: 600;
+  }
+  .output-box {
+    background: #fef2f2;
+    border: 2px solid #fca5a5;
+    border-radius: 8px;
+    padding: 8px 12px;
+    text-align: center;
+    font-size: 11.5px;
+    margin: 4px 0;
+  }
+
+  .out-badge {
+    display: inline-block;
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #0369a1;
+    font-family: "SFMono-Regular", Consolas, monospace;
+    margin: 2px;
+  }
+
+  /* baseline table */
+  table.bl-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 6px; }
+  table.bl-table th { background: #f7f8fa; padding: 4px 8px; text-align: left; border: 1px solid #e5e7eb; font-weight: 600; }
+  table.bl-table td { padding: 4px 8px; border: 1px solid #e5e7eb; }
+  table.bl-table tr:nth-child(even) td { background: #fafafa; }
+  .best { color: #065f46; font-weight: 700; background: #d1fae5 !important; }
+
+  /* notes */
+  .notes { display: flex; flex-direction: column; gap: 14px; }
+  .note-card {
+    background: #fff;
+    border-left: 3px solid #3b82d4;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.55;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .note-card.green  { border-color: #10b981; }
+  .note-card.amber  { border-color: #f59e0b; }
+  .note-card.red    { border-color: #ef4444; }
+  .note-card.purple { border-color: #7c5cd8; }
+  .note-card.dark   { border-color: #374151; }
+  .note-card.pink   { border-color: #ec4899; }
+  .note-card strong {
+    display: block; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em;
+    margin-bottom: 4px; color: #57606a;
+  }
+  .divider { border: none; border-top: 1px solid #e5e7eb; margin: 6px 0 8px; }
+
+  .roadmap-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 4px; }
+  .prio { min-width: 18px; height: 18px; border-radius: 50%; background: #374151; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+
+  footer {
+    margin-top: 32px; padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center; font-size: 11px; color: #57606a;
+  }
+</style>
+</head>
+<body>
+
+<h1>02 · Modeling — MM-CAN-SubCell</h1>
+<p class="subtitle">Multi-Modal Cross-Attention Network per Localizzazione Subcellulare Cerebrale · <em>14 classi · distribuzioni morbide · 4 modalità</em></p>
+
+<div class="layout">
+
+  
+  <div class="flow">
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c0">0</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Setup — dipendenze, seed, dispositivo, percorsi</div>
+        <div class="step-box">
+          <p><span class="tag tag-gray">Seed=42</span> <code>random / numpy / torch / cuda</code> · <code>cudnn.deterministic=True</code> → risultati riproducibili</p>
+          <p><span class="tag tag-gray">Device</span> CUDA → MPS → CPU con autodetect · VRAM 8.6 GB (GTX 1080)</p>
+          <p><span class="tag tag-gray">Costanti</span> BATCH_SIZE=32 · GRAD_ACCUM=4 · EPOCHE_MAX=80 · PATIENCE=15 · K_FOLD=5</p>
+          <p><span class="tag tag-gray">Dirs</span> <code>data/embeddings/</code> · <code>models/</code> · <code>figures/</code> · <code>results/</code></p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c1">1</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Caricamento dati + QC + selezione classi target</div>
+        <div class="step-box">
+          <p><span class="tag tag-blue">Input</span> <code>proteine.parquet</code> · <code>osservazioni.parquet</code> · <code>config_dati.json</code></p>
+          <p><span class="tag tag-blue">Split</span> role=train → 13.043 · role=test → 255 (test HPA indipendente)</p>
+          <p><span class="tag tag-red">Assert</span> no duplicati UniProt · no leak test→train · no sangue · colonne chiave presenti</p>
+          <p><span class="tag tag-green">Pesi fonte</span> deeploc=1.0 · uniprot_forte=0.95 · mitocarta=0.95 · syngo=1.0 · hpa_alta=0.90 · opencell=0.85 · goa_exp=0.75 · bioid=0.70 · uniprot_debole=0.50</p>
+          <p><span class="tag tag-purple">Target</span> classi con ≥50 positivi da fonti forti → <strong>N_CLASSI</strong> selezionate</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c2">2</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Soft labels — distribuzioni percentuali multi-fonte</div>
+        <div class="step-box">
+          <p style="font-size:12px;font-style:italic;color:#374151;margin-bottom:6px">ŷ<sub>c</sub> = Σ<sub>f</sub>(w<sub>f</sub> · obs<sub>f,c</sub>) / Σ<sub>f</sub>(w<sub>f</sub> · 𝟙[f misura c])</p>
+          <p><span class="tag tag-blue">Organelli</span> normalizzati a somma=1 (distribuzione di probabilità) per ogni proteina</p>
+          <p><span class="tag tag-green">Neuronali</span> clip [0,1] ma <em>non normalizzati</em> — probabilità di presenza indipendenti</p>
+          <p><span class="tag tag-amber">Label smoothing</span> ε=0.05 per distribuzioni quasi-one-hot (unica fonte) → evita over-confidence</p>
+          <p><span class="tag tag-gray">Classe primaria</span> argmax degli organelli → usata per stratificazione dello split</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c3">3</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Embedding multi-modali — 4 rami</div>
+        <div class="step-box">
+          <div class="arch-grid">
+            <div class="arch-box blue"><strong>Ramo A</strong><br />ESM-2<br />seq. completa<br /><em>E_seq ∈ R^D</em><br /><span style="color:#57606a;font-size:10px">mean pooling<br />1–1022 aa</span></div>
+            <div class="arch-box blue"><strong>Ramo B</strong><br />ESM-2<br />N / Centro / C<br /><em>E_frag ∈ R^3D</em><br /><span style="color:#57606a;font-size:10px">frammenti 100aa<br />concat 3 embed.</span></div>
+            <div class="arch-box orange"><strong>Ramo C</strong><br />BioLinkBERT<br />card_protein<br /><em>E_text ∈ R^1024</em><br /><span style="color:#57606a;font-size:10px">mean pooling<br />max 512 token</span></div>
+            <div class="arch-box gray"><strong>Ramo D</strong><br />AlphaFold<br />feature numeriche<br /><em>F_struct ∈ R^D</em><br /><span style="color:#57606a;font-size:10px">23 feat. pLDDT<br />+ aux_/ctx_</span></div>
+          </div>
+          <p><span class="tag tag-purple">Cache</span> embedding salvati su disco (NPY) · ricalcolo solo se assenti</p>
+          <p><span class="tag tag-amber">Fallback ESM</span> 650M → 35M se VRAM insufficiente · fallback BERT → BiomedBERT → biomed_roberta</p>
+          <p style="font-size:11.5px;color:#57606a;margin-top:4px">StandardScaler fit SOLO sul training set per ogni ramo → applicato a train/val/test separatamente.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c4">4</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Architettura MM-CAN-SubCell in PyTorch</div>
+        <div class="step-box">
+
+          
+          <div class="arch-grid">
+            <div class="arch-box blue" style="font-size:10px">H_seq<br />R^512</div>
+            <div class="arch-box blue" style="font-size:10px">H_frag<br />R^512</div>
+            <div class="arch-box orange" style="font-size:10px">H_text<br />R^512</div>
+            <div class="arch-box gray" style="font-size:10px">H_struct<br />R^64</div>
+          </div>
+          <p style="font-size:10.5px;color:#e65100;font-style:italic;margin:3px 0 3px">↑ Projection Layer: Linear + LayerNorm + GELU + Dropout per ogni ramo</p>
+
+          
+          <div style="background:#faf5ff;border:2px solid #c4b5fd;border-radius:8px;padding:7px 10px;text-align:center;font-size:11.5px;margin:4px 0;font-weight:600">
+            🔀 CROSS-ATTENTION (8 heads, d_k=64)<br />
+            <span style="font-weight:400;font-size:11px">Q = H_text  |  K = V = mean(H_seq, H_frag)<br />Attended_repr = LayerNorm(attn_out + H_text) · DropPath(0.1)</span>
+          </div>
+
+          
+          <div class="fusion-box">
+            FUSION: Concat([Attended · H_text · H_struct]) → 1088-dim<br />
+            <span style="font-weight:400;font-size:11px">Linear(1088→512) + LN + GELU + Drop(0.3) → Linear(512→256) + LN + GELU + Drop(0.2)</span>
+          </div>
+
+          
+          <div class="output-box">
+            OUTPUT HEAD: Linear(256 → N_CLASSI) → Softmax<br />
+            <strong>p = [p₁, …, pC]   Σpᵢ = 1.0</strong>
+          </div>
+
+          <p style="font-size:11.5px;color:#57606a;margin-top:5px">Init Xavier · Stochastic Depth 0.1 · metodo <code>get_penultimate()</code> per UMAP</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c5">5</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Training — Loss, Ottimizzatore, Early Stopping</div>
+        <div class="step-box">
+          <p style="font-size:12px;font-style:italic;color:#374151;margin-bottom:5px">𝓛 = KL(y‖ŷ) + λ·Σ(1−ŷᵢ)^γ·log(ŷᵢ)    [λ=0.1, γ=2]</p>
+          <p><span class="tag tag-amber">Ottimizzatore</span> AdamW · lr=3e-4 · weight_decay=1e-4</p>
+          <p><span class="tag tag-amber">Scheduler</span> Linear warm-up 5 epoche → CosineAnnealingWarmRestarts (T₀=10)</p>
+          <p><span class="tag tag-amber">Stabilità</span> Gradient clipping max_norm=1.0 · Gradient accumulation ×4 (simula batch 128) · AMP autocast</p>
+          <p><span class="tag tag-red">Early stopping</span> patience=15 su val_KL · ripristino best weights · checkpoint ogni 5 epoche + best</p>
+          <p><span class="tag tag-gray">Split</span> stratificato 70/15/15 per classe primaria degli organelli</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c6">6</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">5-Fold Cross-Validation</div>
+        <div class="step-box">
+          <p>StratifiedKFold · 5 fold · seed per fold indipendente · 30 epoche max / patience 8 / batch accum ×2</p>
+          <p>Output per fold: <strong>val_KL</strong> (convergenza) + <strong>AUC macro</strong> (capacità discriminativa)</p>
+          <p style="font-size:11.5px;color:#57606a;margin-top:4px">Ogni fold istanzia un nuovo modello con pesi indipendenti. GPU memory freed tra un fold e l'altro.</p>
+          <p style="margin-top:3px"><code>CV KL: μ ± σ  |  CV AUC: μ ± σ</code></p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c7">7</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Confronto Baseline (5 modelli)</div>
+        <div class="step-box">
+          <table class="bl-table">
+            <thead><tr><th>Modello</th><th>Input</th><th>Metrica</th></tr></thead>
+            <tbody>
+              <tr><td>Dummy majority</td><td>—</td><td>lower bound</td></tr>
+              <tr><td>Logistic Regression</td><td>ESM+BERT+struct → PCA 256D</td><td>accuracy · F1 · AUC</td></tr>
+              <tr><td>Random Forest (500 alberi)</td><td>PCA 128D</td><td>accuracy · F1 · AUC</td></tr>
+              <tr><td>MLP semplice (3 layer)</td><td>concat flat (no attenzione)</td><td>KL · accuracy · F1 · AUC</td></tr>
+              <tr class="best"><td>MM-CAN-SubCell</td><td>4 rami + cross-attention</td><td>KL · accuracy · F1 · AUC</td></tr>
+            </tbody>
+          </table>
+          <p style="font-size:11px;color:#57606a;margin-top:6px">PCA fit solo su training. Heatmap seaborn + tabella CSV salvata in <code>results/metrics_comparison.csv</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c8">8</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Figure di valutazione</div>
+        <div class="step-box">
+          <p><span class="tag tag-purple">ROC per compartimento</span> subplot OvR per ogni classe organellare · AUC per modello</p>
+          <p><span class="tag tag-purple">ROC macro-averaged</span> figura obbligatoria · area guadagno MM-CAN vs Dummy evidenziata · annotazione biologica in box</p>
+          <p><span class="tag tag-purple">Precision-Recall</span> AP per modello per compartimento</p>
+          <p><span class="tag tag-purple">Confusion matrix</span> heatmap MM-CAN sul test set · classification report per classe</p>
+          <p><span class="tag tag-blue">Arch diagram</span> schema matplotlib dell'architettura → PNG + PDF</p>
+          <p><span class="tag tag-blue">Training curve</span> KL train e val per epoca · linea best epoch</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c9">9</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">UMAP delle rappresentazioni 256-dim</div>
+        <div class="step-box">
+          <p><code>get_penultimate()</code> → strato 256-dim di tutti i campioni (train+val+test)</p>
+          <p>UMAP: n_neighbors=15 · min_dist=0.1 · metric=cosine · colorato per compartimento primario reale</p>
+          <p><span class="tag tag-green">Atteso</span> cluster compatti Mitocondri · zona di confine ER/Golgi · Presinapsi/Postsinapsi vicini · outlier = candidati mislocalization</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c10">10</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Output predittivo per-proteina</div>
+        <div class="step-box">
+          <div>
+            <span class="out-badge">results/metrics_comparison.csv</span>
+            <span class="out-badge">models/mm_can_subcell_best.pt</span>
+            <span class="out-badge">figures/roc_comparison_final.png</span>
+            <span class="out-badge">figures/umap_mmcan_subcell.png</span>
+            <span class="out-badge">figures/confusion_matrix_mmcan.png</span>
+          </div>
+          <p style="margin-top:7px;font-size:11.5px">DataFrame per-proteina: gene · classe_vera · classe_predetta · correttezza · P_Cytoplasm · P_Nucleus · … · Top-3 compartimenti</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  
+  <div class="notes">
+
+    <div class="note-card purple">
+      <strong>🔀 Perché Cross-Attention, non concatenazione?</strong>
+      Concatenare porta a un vettore di input di 2560+7680+1024+D_struct dimensioni, con informazioni ridondanti e ortogonali. La cross-attention (Q=testo, K/V=sequenza) permette al contesto funzionale di <em>interrogare selettivamente</em> i pattern di sequenza rilevanti — come un biologo usa la funzione molecolare per interpretare i segnali di targeting. Riduce il rumore, aumenta la specificità. È computazionalmente lineare (un singolo token per modalità).
+    </div>
+
+    <div class="note-card">
+      <strong>📖 Perché ESM-2 per la sequenza?</strong>
+      Lin et al. (2023, Science): ESM-2 3B parametri supera ESM-1b e ProtTrans T5 su tutti i benchmark inclusa la localizzazione (MCC &gt; 0.90 su DeepLoc con solo mean-pooling). Addestrato su 250M sequenze UR50D senza supervisione. Usato <code>esm2_t33_650M_UR50D</code> come compromesso prestazione/VRAM su GPU T4.
+    </div>
+
+    <div class="note-card green">
+      <strong>🧩 Perché i frammenti N/Centro/C?</strong>
+      Almagro Armenteros et al. (2019, Nature Methods / TargetP-2.0): peptide segnale ER (N-term), presequence mitocondriale (N-term), PTS1 perossisomi (C-term), motivi PDZ/KDEL (C-term) e motivi sinaptici (C-term) sono tutti segnali terminali. Il mean-pooling globale diluisce questi segnali brevi. L'embedding dei frammenti li cattura con risoluzione locale, complementare alla visione globale di Ramo A.
+    </div>
+
+    <div class="note-card amber">
+      <strong>📊 Perché KL Divergence?</strong>
+      Le etichette target sono <em>distribuzioni</em> (non classi discrete): la multi-localizzazione è la norma. La cross-entropy categoriale penalizzerebbe l'assegnazione parziale a compartimenti secondari. KL minimizza la distanza informazionale tra distribuzione predetta e target morbida (Hinton 2015; Zhang 2021 label distribution learning). La componente Focal (γ=2, λ=0.1) forza la rete ad apprendere le classi minoritarie senza ignorare quelle già ben predette.
+    </div>
+
+    <div class="note-card red">
+      <strong>🚫 Leakage check card_protein</strong>
+      Il test con <code>card_full</code> vs <code>card_protein</code> misura il delta di prestazione. Se delta &gt; 5% accuracy, la card pulita è necessaria per una valutazione onesta. Se delta ≈ 0, la pulizia non ha penalizzato il modello (informazione funzionale sufficiente senza leakage esplicito).
+    </div>
+
+    <div class="note-card dark">
+      <strong>📐 Dimensionalità pipeline</strong>
+      <hr class="divider" />
+      <p style="font-size:11.5px;margin-bottom:3px"><strong>Input raw:</strong></p>
+      <p style="font-size:11.5px">A: ESM-2 650M → 1280-dim</p>
+      <p style="font-size:11.5px">B: ESM-2 ×3 frammenti → 3840-dim</p>
+      <p style="font-size:11.5px">C: BioLinkBERT → 1024-dim</p>
+      <p style="font-size:11.5px">D: AlphaFold+aux → 23+ dim</p>
+      <hr class="divider" />
+      <p style="font-size:11.5px;margin-bottom:3px"><strong>Dopo proiezione:</strong></p>
+      <p style="font-size:11.5px">H_seq → 512 · H_frag → 512 · H_text → 512 · H_struct → 64</p>
+      <hr class="divider" />
+      <p style="font-size:11.5px;margin-bottom:3px"><strong>Dopo cross-attention e fusion:</strong></p>
+      <p style="font-size:11.5px">Attended(512) + H_text(512) + H_struct(64) → 1088 → 512 → 256 → N_CLASSI</p>
+    </div>
+
+    <div class="note-card pink">
+      <strong>🗺️ Roadmap — Prossimi Passi</strong>
+      <hr class="divider" />
+      <div class="roadmap-row"><div class="prio">1</div><div style="font-size:11px">Fine-tuning ESM-2 end-to-end con LoRA → +3–5% AUC</div></div>
+      <div class="roadmap-row"><div class="prio">2</div><div style="font-size:11px">Allen Brain Cell Atlas (scRNA-seq) come feature condizionale → +2–3% AUC su classi neuronali</div></div>
+      <div class="roadmap-row"><div class="prio">3</div><div style="font-size:11px">Validazione biologica: SNCA, TARDBP, MAPT, FUS → impatto traslazionale</div></div>
+      <div class="roadmap-row"><div class="prio">4</div><div style="font-size:11px">Optuna HPO (100+ trial) → +1–2% AUC</div></div>
+      <div class="roadmap-row"><div class="prio">5</div><div style="font-size:11px">Arricchimento classi scarse (Perossisoma &lt;100 campioni) da Human Cell Map</div></div>
+    </div>
+
+    <div class="note-card green">
+      <strong>🎯 Obiettivo biologico finale</strong>
+      Le malattie neurodegenerative (Alzheimer, Parkinson, SLA) sono associate alla <em>mislocalization proteica</em>: proteine che si ritrovano in compartimenti anomali dove formano aggregati tossici. MM-CAN-SubCell predice la distribuzione di probabilità di localizzazione per ogni proteina cerebrale umana, identificando i candidati mislocalizzati su scala proteomica.
+    </div>
+
+  </div>
+
+</div>
+
+<footer>Made with IBM Bob</footer>
+
+</body>
+</html>

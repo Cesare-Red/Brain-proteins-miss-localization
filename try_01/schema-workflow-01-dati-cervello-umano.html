@@ -1,0 +1,454 @@
+
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<title>01 · Dati — Workflow</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    background: #f7f8fa;
+    color: #1f2328;
+    padding: 28px 20px 40px;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1f2328;
+    margin-bottom: 4px;
+  }
+  .subtitle {
+    font-size: 12.5px;
+    color: #57606a;
+    margin-bottom: 28px;
+  }
+
+  /* layout a due colonne */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
+  /* colonna flusso */
+  .flow { display: flex; flex-direction: column; gap: 0; }
+
+  /* blocco step */
+  .step {
+    display: flex;
+    align-items: stretch;
+    position: relative;
+  }
+  .step-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 44px;
+    flex-shrink: 0;
+  }
+  .step-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    flex-shrink: 0;
+    z-index: 1;
+  }
+  .step-line {
+    width: 2px;
+    flex: 1;
+    background: #d8dde6;
+    margin-top: 4px;
+    margin-bottom: 0;
+  }
+  .step:last-child .step-line { display: none; }
+
+  .step-body {
+    flex: 1;
+    padding: 0 0 20px 12px;
+  }
+  .step-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #1f2328;
+    margin-bottom: 4px;
+  }
+  .step-box {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+  }
+  .step-box p { margin-bottom: 4px; }
+  .step-box p:last-child { margin-bottom: 0; }
+
+  .tag {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 10px;
+    font-size: 10.5px;
+    font-weight: 600;
+    margin-right: 4px;
+    margin-bottom: 3px;
+  }
+  .tag-blue  { background: #dbeafe; color: #1e40af; }
+  .tag-green { background: #d1fae5; color: #065f46; }
+  .tag-amber { background: #fef3c7; color: #92400e; }
+  .tag-red   { background: #fee2e2; color: #991b1b; }
+  .tag-purple{ background: #ede9fe; color: #5b21b6; }
+  .tag-gray  { background: #f3f4f6; color: #374151; }
+  .tag-teal  { background: #ccfbf1; color: #134e4a; }
+
+  /* colore cerchietto per step */
+  .c1 { background:#3b82d4; }
+  .c2 { background:#0ea5e9; }
+  .c3 { background:#10b981; }
+  .c4 { background:#10b981; }
+  .c5 { background:#10b981; }
+  .c6 { background:#10b981; }
+  .c7 { background:#10b981; }
+  .c8 { background:#f59e0b; }
+  .c9 { background:#f59e0b; }
+  .c10{ background:#f59e0b; }
+  .c11{ background:#ef4444; }
+  .c12{ background:#7c5cd8; }
+  .c13{ background:#7c5cd8; }
+  .c14{ background:#374151; }
+
+  /* output badge */
+  .output-row {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  }
+  .out-badge {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #0369a1;
+    font-family: "SFMono-Regular", Consolas, monospace;
+  }
+
+  /* colonna note */
+  .notes { display: flex; flex-direction: column; gap: 14px; }
+  .note-card {
+    background: #fff;
+    border-left: 3px solid #3b82d4;
+    border-radius: 0 8px 8px 0;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.55;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  }
+  .note-card.green  { border-color: #10b981; }
+  .note-card.amber  { border-color: #f59e0b; }
+  .note-card.red    { border-color: #ef4444; }
+  .note-card.purple { border-color: #7c5cd8; }
+  .note-card.dark   { border-color: #374151; }
+  .note-card strong {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 4px;
+    color: #57606a;
+  }
+
+  .divider {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 6px 0 10px;
+  }
+
+  /* legenda classi */
+  .legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px 10px;
+    font-size: 11.5px;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  footer {
+    margin-top: 32px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+    text-align: center;
+    font-size: 11px;
+    color: #57606a;
+  }
+
+  /* mini tabella fonti */
+  table.src-table { width: 100%; border-collapse: collapse; font-size: 11.5px; margin-top: 6px; }
+  table.src-table th { background: #f7f8fa; padding: 4px 8px; text-align: left; border: 1px solid #e5e7eb; font-weight: 600; }
+  table.src-table td { padding: 4px 8px; border: 1px solid #e5e7eb; vertical-align: top; }
+  table.src-table tr:nth-child(even) td { background: #fafafa; }
+</style>
+</head>
+<body>
+
+<h1>01 · Dati — Proteine Cerebrali Umane</h1>
+<p class="subtitle">Workflow completo dalla sorgente grezza ai file Parquet pronti per il modeling · <em>13.298 proteine · 439.719 osservazioni</em></p>
+
+<div class="layout">
+
+  
+  <div class="flow">
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c1">1</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Configurazione globale &amp; download fonti</div>
+        <div class="step-box">
+          <p><span class="tag tag-blue">Costanti</span> 14 classi target · soglie espressione · flag <code>ESCLUDI_SANGUE</code> · <code>USE_ALPHAFOLD</code></p>
+          <p><span class="tag tag-gray">Download</span> UniProt umano (reviewed) · DeepLoc 2.0 train+test · HPA subcellulare/RNA/single-cell · OpenCell · LOPIT ×3 · BioID · <strong>GOA umano + go-basic.obo</strong></p>
+          <p><span class="tag tag-amber">Manuale</span> MitoCarta 3.0 (<code>cache/mitocarta3.xlsx</code>) · SynGO · fonti neuronali CSV</p>
+          <p style="margin-top:6px;font-size:11.5px;color:#57606a">Ogni file è scaricato in atomica (<code>.part</code> → rinomina), con retry su 429/5xx. Fonti opzionali non bloccano.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c2">2</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Universo proteico: UniProt umano + DeepLoc (solo umane)</div>
+        <div class="step-box">
+          <p><span class="tag tag-blue">Input</span> UniProt reviewed organism:9606 non-fragment → <strong>20.430</strong> proteine</p>
+          <p><span class="tag tag-blue">Filtro</span> DeepLoc 28.303 → <strong>6.755 umane</strong> (sequenza identica a UniProt)</p>
+          <p><span class="tag tag-purple">Dizionario</span> simbolo genico → UniProt (ufficiale + alias non ambigui) · sequenza → UniProt</p>
+          <p><span class="tag tag-red">Test HPA</span> 1.717 proteine DeepLoc, 319 collegate a UniProt → set di test indipendente (isolato subito)</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c3">3</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Osservazioni multi-fonte → tabella lunga (proteina × fonte × classe → 0/1)</div>
+        <div class="step-box">
+          <table class="src-table">
+            <thead><tr><th>Fonte</th><th>Classi coperte</th><th>Tipo</th></tr></thead>
+            <tbody>
+              <tr><td><strong>UniProt forte</strong></td><td>tutti gli organelli + domini neuronali</td><td>ECO sperimentale</td></tr>
+              <tr><td><strong>UniProt debole</strong></td><td>tutti gli organelli + domini neuronali</td><td>inferenza/similarità</td></tr>
+              <tr><td><strong>HPA alta/approved</strong></td><td>8 organelli (no extracell.)</td><td>microscopia IHC</td></tr>
+              <tr><td><strong>MitoCarta 3.0</strong></td><td>solo Mitocondri</td><td>inventario completo → zeri affidabili</td></tr>
+              <tr><td><strong>OpenCell</strong></td><td>8 organelli</td><td>live cell imaging HEK293T</td></tr>
+              <tr><td><strong>SynGO</strong></td><td>Presinapsi / Postsinapsi</td><td>curato manuale</td></tr>
+              <tr><td><strong>GOA exp</strong></td><td>tutti (14 classi)</td><td>solo positivi (mondo aperto)</td></tr>
+              <tr><td><strong>LOPIT ×3</strong></td><td>8 organelli</td><td>SVM su profili frazion. (p ≥ 0.7)</td></tr>
+              <tr><td><strong>BioID</strong></td><td>8 organelli</td><td>prossimità APEX/BioID NMF</td></tr>
+              <tr><td><strong>DeepLoc (umane)</strong></td><td>9 organelli</td><td>dataset oro</td></tr>
+              <tr><td><strong>Fonti esterne CSV</strong></td><td>Assone/Dendrite/ecc.</td><td>proteomiche iPSC manuali</td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:6px;font-size:11.5px;color:#57606a"><strong>Regola assenze:</strong> ogni fonte dichiara 0 solo per le proteine che riporta e le classi che sa misurare. GOA = solo positivi, mai zeri.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c4">4</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">GOA sperimentale → etichette per domini neuronali</div>
+        <div class="step-box">
+          <p><span class="tag tag-green">OBO</span> parse <code>go-basic.obo</code>: grafo is_a + part_of → tutti i discendenti di 14 termini radice</p>
+          <p><span class="tag tag-green">GAF</span> filtra aspect=C, evidence ∈ {EXP,IDA,IPI,IMP,IGI,IEP,HTP,HDA…}, escludi NOT/colocalizes_with</p>
+          <p><span class="tag tag-red">Escludi</span> esosomi/vescicole extracell. (GO:0070062) → riduce il rumore proteomico</p>
+          <p style="margin-top:4px"><strong>Contributo chiave:</strong> assone 53 · dendrite 67 · presinapsi 47 · postsinapsi 90 · mielina 4 proteine</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c5">5</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Target ausiliari (meccanismi di sorting) — solo predetti, mai input</div>
+        <div class="step-box">
+          <p>Peptide segnale · peptide di transito · TM ≥1/≥2 · ancora lipidica/GPI · glicoproteina · NLS · multimero · fosforilazione · ubiquitinazione · palmitoilazione · processamento proteolitico · aggregati/amiloide · patologia cerebrale · sinaptopatia</p>
+          <p style="margin-top:5px;font-size:11.5px;color:#57606a">Estratti da UniProt via regex su campi FT/CC/Keywords. Non entrano mai come feature del modello: il modello li deve <em>predire</em> dalla sequenza.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c6">6</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Espressione cerebrale &amp; esclusione sangue</div>
+        <div class="step-box">
+          <p><span class="tag tag-blue">HPA RNA tessuto</span> 15 regioni cerebrali · soglia <code>nTPM ≥ 10</code></p>
+          <p><span class="tag tag-blue">HPA single-cell</span> neuroni, astrociti, oligodendrociti, microglia · soglia <code>nCPM ≥ 5</code></p>
+          <p><span class="tag tag-red">Sangue</span> secretoma epatico + cellule ematiche enrich./enhanced senza espressione cerebrale + emoglobine (regex HB*) → <strong>escluse 2.781 proteine</strong></p>
+          <p><span class="tag tag-teal">Quote fraz.</span> Hein 2024 (HEK293T) + Itzhak 2016 (HeLa): <code>frac_cyto</code> / <code>frac_nuc</code> → 9.438 proteine (nota: linee tumorali, non neuroni)</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c7">7</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Coorte finale &amp; validazione (funnel dei filtri)</div>
+        <div class="step-box">
+          <p>UniProt umane reviewed <strong>20.430</strong></p>
+          <p>→ lunghezza 41–12.000 aa <strong>20.358</strong></p>
+          <p>→ senza sangue <strong>17.649</strong></p>
+          <p>→ espresse nel cervello <strong>13.298</strong></p>
+          <p>→ di cui addestrabili (≥1 obs) <strong>13.043</strong></p>
+          <p>→ test HPA indipendente <strong>255</strong> (role=test, isolate prima di creare <code>obs</code>)</p>
+          <p style="margin-top:5px"><span class="tag tag-red">Assert</span> no UniProt duplicati · no caratteri non-AA · no leak test→train · no sangue residuo · <code>obs ∈ {0,1}</code></p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c8">8</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">AlphaFold: 23 feature strutturali per proteina</div>
+        <div class="step-box">
+          <p><span class="tag tag-amber">API</span> <code>alphafold.ebi.ac.uk/api/prediction/{UniProt}</code> → JSON + PDB (fattore B = pLDDT)</p>
+          <p><span class="tag tag-amber">Feature</span> pLDDT medio/regionale · frazioni confidenza · esposizione N10/C5 (Cα entro 10 Å) · eliche lunghe idrofobiche (proxy TM) · disordine · patch di lisine esposte (M6P) · idrofobiche esposte · raggio di girazione · copertura parziale</p>
+          <p style="font-size:11.5px;color:#57606a;margin-top:4px">Download parallelo con 8 worker, cache su disco; proteine senza struttura ricevono NaN (il modello gestisce con imputation).</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c9">9</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title"><code>card_protein</code> — profilo testuale esperto (6 sezioni)</div>
+        <div class="step-box">
+          <p><strong>1.</strong> Identità &amp; funzione (nome, famiglia, attività catalitica, via metabolica)</p>
+          <p><strong>2.</strong> Domini, motivi, ripetizioni, zinc finger, coiled-coil (da campi FT)</p>
+          <p><strong>3.</strong> Malattie neurologiche associate (17 pattern classificatori)</p>
+          <p><strong>4.</strong> Regolazione, PTM, partner/complessi</p>
+          <p><strong>5.</strong> Espressione cerebrale (HPA tessuto + single-cell + specificità tissutale UniProt)</p>
+          <p><strong>6.</strong> Profilo esperto a regole: classe funzionale (20 categorie) + rilevanza neurologica + dimensione + struttura AlphaFold</p>
+          <p style="margin-top:5px"><span class="tag tag-red">Anti-leakage</span> <code>card_protein</code>: frasi con termini di compartimento rimosse (regex 40+ pattern). <code>card_full</code>: versione integrale per misurare il delta di prestazione nel notebook 02.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c10">10</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">EDA: bilanciamento classi &amp; distribuzione espressione</div>
+        <div class="step-box">
+          <p>Tabella positivi per fonte × classe · barplot classi forti (blu=organelli, verde=neuronali) · istogramma log10(nTPM/nCPM)</p>
+          <p style="font-size:11.5px;color:#57606a;margin-top:4px">Classi con &lt;150 positivi segnalate: stime più incerte nel notebook 02.</p>
+        </div>
+      </div>
+    </div>
+
+    
+    <div class="step">
+      <div class="step-left"><div class="step-num c11">11</div><div class="step-line"></div></div>
+      <div class="step-body">
+        <div class="step-title">Salvataggio output</div>
+        <div class="step-box">
+          <div class="output-row">
+            <span class="out-badge">data/proteine.parquet</span>
+            <span class="out-badge">data/osservazioni.parquet</span>
+            <span class="out-badge">data/config_dati.json</span>
+            <span class="out-badge">data/eda_classi.png</span>
+          </div>
+          <p style="margin-top:6px;font-size:11.5px">proteine.parquet: pid, uniprot_id, gene, sequence, role (train/test), has_label, is_brain/neuronal/oligo, frac_cyto/nuc, card_protein/full + af_* + aux_* + ctx_* + test_*</p>
+          <p style="font-size:11.5px">osservazioni.parquet: pid, uniprot_id, fonte, classe, obs (0.0/1.0)</p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  
+  <div class="notes">
+
+    <div class="note-card">
+      <strong>🧠 Perché solo proteine cerebrali?</strong>
+      Il tool serve ai ricercatori delle malattie neuronali. Includere albume, emoglobine e proteine della coagulazione avrebbe inquinato il training con logiche di localizzazione diverse da quelle neuronali. La coorte cerebrale rende il modello specializzato e le classi rare (assone, mielina) più rappresentate in proporzione.
+    </div>
+
+    <div class="note-card green">
+      <strong>🔬 Perché GOA sperimentale è nuovo?</strong>
+      Senza GOA, i domini neuronali avevano poche decine di esempi (SynGO copre bene sinapsi ma non assone/dendrite/mielina). GOA con evidenza EXP/IDA/IMP porta 53+ proteine assonali, 67 dendritiche, 47 presinaptiche — il minimo critico per apprendere segnali di targeting specifici.
+    </div>
+
+    <div class="note-card amber">
+      <strong>⚠️ Regola delle assenze</strong>
+      Una fonte dice 1 (presente), 0 (assente) o niente (non osservato). Lo 0 è prodotto solo per le proteine riportate dalla fonte e per le classi che quella fonte sa misurare. GOA non produce mai zeri (mondo aperto). Questo evita di insegnare al modello false assenze.
+    </div>
+
+    <div class="note-card purple">
+      <strong>🏗️ AlphaFold: perché feature strutturali?</strong>
+      Il peptide segnale ER, il presequence mitocondriale e il motivo PTS1 (perossisomi) funzionano solo se sono <em>esposti</em> nella struttura 3D. La sequenza da sola non cattura l'accessibilità del C-terminale. pLDDT basso = disordine = candidato a condensati/granuli. Le eliche idrofobiche lunghe predicono le TM helices reali meglio delle sole regole di sequenza.
+    </div>
+
+    <div class="note-card red">
+      <strong>🚫 Anti-leakage card_protein</strong>
+      UniProt scrive "localizzata nella densità postsinaptica" dentro il campo funzione. Dare questo testo come input sarebbe dare la risposta al modello. La versione <code>card_protein</code> elimina ogni frase che nomina un compartimento, un segnale di targeting o un modificazione lipidica. La <code>card_full</code> misura quanto leakage resterebbe se non si facesse questa pulizia.
+    </div>
+
+    <div class="note-card dark">
+      <strong>📊 Numeri chiave</strong>
+      <hr class="divider" />
+      <div class="legend-grid">
+        <div class="legend-item"><div class="dot" style="background:#3b82d4"></div>UniProt umane: <strong>20.430</strong></div>
+        <div class="legend-item"><div class="dot" style="background:#10b981"></div>Coorte cerebrale: <strong>13.298</strong></div>
+        <div class="legend-item"><div class="dot" style="background:#ef4444"></div>Escluse (sangue): <strong>2.781</strong></div>
+        <div class="legend-item"><div class="dot" style="background:#f59e0b"></div>Test HPA: <strong>255</strong></div>
+        <div class="legend-item"><div class="dot" style="background:#7c5cd8"></div>Osservazioni totali: <strong>439.719</strong></div>
+        <div class="legend-item"><div class="dot" style="background:#0ea5e9"></div>Con AF struttura: <strong>~1.000+</strong></div>
+        <div class="legend-item"><div class="dot" style="background:#374151"></div>Classi predette: <strong>14</strong> (9+5)</div>
+        <div class="legend-item"><div class="dot" style="background:#6b7280"></div>Fonti label: <strong>13</strong></div>
+      </div>
+    </div>
+
+    <div class="note-card">
+      <strong>📐 Le 14 classi target</strong>
+      <hr class="divider" />
+      <p style="font-size:11.5px;margin-bottom:6px"><span style="color:#3b82d4;font-weight:600">Asse A — 9 organelli</span> (partizione: somma=1)</p>
+      <div class="legend-grid" style="margin-bottom:8px">
+        <div>Citoplasm</div><div>Nucleus</div>
+        <div>Extracellular</div><div>Cell membrane</div>
+        <div>Mitochondrion</div><div>ER / Golgi</div>
+        <div>Lysosome/Vac.</div><div>Peroxisome</div>
+        <div>—</div><div>—</div>
+      </div>
+      <p style="font-size:11.5px;margin-bottom:6px"><span style="color:#10b981;font-weight:600">Asse B — 5 domini neuronali</span> (non esclusivi)</p>
+      <div class="legend-grid">
+        <div>Assone</div><div>Dendrite</div>
+        <div>Presinapsi</div><div>Postsinapsi</div>
+        <div>Mielina</div><div>—</div>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<footer>Made with IBM Bob</footer>
+
+</body>
+</html>
