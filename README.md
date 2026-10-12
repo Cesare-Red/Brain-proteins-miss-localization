@@ -28,10 +28,11 @@ Brain-miss-localization/
 │
 ├── Try-01/
 │   ├── 01_dati_cervello_umano.ipynb   # Pipeline dati: download, preprocessing, etichette
-│   ├── 02_modeling.ipynb              # Architettura MM-CAN-SubCell, training, valutazione
-│   ├── page-1.png                     # Schema workflow dati (pagina 1/3)
-│   ├── page-2.png                     # Schema workflow dati (pagina 2/3)
-│   └── page-3.png                     # Schema workflow dati (pagina 3/3)
+│   └── 02_modeling.ipynb              # Architettura MM-CAN-SubCell, training, valutazione
+│
+├── Documentazione/
+│   ├── schema_01_dati.html            # Schema interattivo workflow dati
+│   └── schema_02_modeling.html        # Schema interattivo workflow modeling
 │
 ├── data/                              # Generata da 01_dati (non inclusa nel repo)
 │   ├── proteine.parquet               # Coorte cerebrale + feature + card_protein
@@ -57,7 +58,6 @@ Brain-miss-localization/
 ├── results/
 │   └── metrics_comparison.csv        # Tabella comparativa tutti i modelli
 │
-├── Documentazione/                    # Documentazione di progetto
 ├── requirements.txt
 └── README.md
 ```
@@ -68,11 +68,11 @@ Brain-miss-localization/
 
 Il notebook costruisce la coorte cerebrale umana a partire da zero, scaricando e integrando 13+ fonti biologiche. L'output è un insieme di file Parquet pronti per il modeling.
 
-### Visualizzazione del workflow
+### Schema interattivo
 
-| ![Schema workflow dati — pagina 1](Try-01/page-1.png) | ![Schema workflow dati — pagina 2](Try-01/page-2.png) | ![Schema workflow dati — pagina 3](Try-01/page-3.png) |
-|:---:|:---:|:---:|
-| **Step 1–3** · Configurazione, UniProt, osservazioni multi-fonte | **Step 4–7** · GOA, target ausiliari, espressione cerebrale, funnel filtri | **Step 8–11** · AlphaFold, `card_protein`, EDA, salvataggio |
+> 📊 **[Apri lo schema completo del workflow dati](Documentazione/schema_01_dati.html)**
+>
+> Lo schema illustra tutti gli 11 step del notebook: configurazione, download fonti, costruzione osservazioni multi-fonte, GOA sperimentale, funnel dei filtri, feature AlphaFold, `card_protein` e salvataggio.
 
 ### Passaggi principali
 
@@ -168,6 +168,12 @@ Sei sezioni estratte dai campi UniProt per ogni proteina:
 ## Workflow — Modeling (`02_modeling.ipynb`)
 
 Il notebook addestra **MM-CAN-SubCell** e lo confronta con quattro baseline.
+
+### Schema interattivo
+
+> 📊 **[Apri lo schema completo del workflow di modeling](Documentazione/schema_02_modeling.html)**
+>
+> Lo schema illustra i 10 step del notebook: setup, soft labels, embedding multi-modali, architettura MM-CAN-SubCell, training, 5-fold CV, confronto baseline, figure ROC, UMAP e output predittivo.
 
 ### Architettura MM-CAN-SubCell
 
@@ -331,7 +337,7 @@ Eseguire tutte le celle in ordine. Gli embedding ESM-2 e BioLinkBERT vengono cal
 | **DeepLoc 2.0** | Dataset oro train/test per localizzazione | [services.healthtech.dtu.dk](https://services.healthtech.dtu.dk/services/DeepLoc-2.0/) |
 | **Human Protein Atlas (HPA)** | Microscopia IHC, RNA tessuto, RNA single-cell | [proteinatlas.org](https://www.proteinatlas.org) |
 | **OpenCell** | Live cell imaging (HEK293T, tag endogeno) | [opencell.czbiohub.org](https://opencell.czbiohub.org) |
-| **LOPIT** (×3) | Protecomica spaziale per frazionamento | [github.com/czbiohub-sf/Organelle\_IP](https://github.com/czbiohub-sf/Organelle_IP_analyses_and_figures) |
+| **LOPIT** (×3) | Proteomica spaziale per frazionamento | [github.com/czbiohub-sf/Organelle\_IP](https://github.com/czbiohub-sf/Organelle_IP_analyses_and_figures) |
 | **BioID 2021** | Prossimità APEX2/BioID NMF | idem |
 | **MitoCarta 3.0** | Inventario completo proteoma mitocondriale umano | [broadinstitute.org/mitocarta](https://www.broadinstitute.org/mitocarta) |
 | **SynGO** | Proteine sinaptiche curate manualmente | [syngoportal.org](https://www.syngoportal.org) |
