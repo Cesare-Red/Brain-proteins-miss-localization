@@ -1,335 +1,366 @@
-# NeuroLoc-Δ
+# 🧠 Brain Protein Mislocalization — Localizzazione Subcellulare Cerebrale
 
-**Predizione della localizzazione subcellulare delle proteine cerebrali e dei meccanismi di mislocalizzazione delle varianti missense, con embedding ESM-2 e supervisione multi-fonte.**
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.1%2B-EE4C2C?logo=pytorch&logoColor=white)
+![License](https://img.shields.io/badge/Licenza-MIT-green)
+![Status](https://img.shields.io/badge/Stato-In%20sviluppo-yellow)
 
-Il progetto è composto da **due notebook**:
-
-| Notebook | Cosa fa |
-|---|---|
-| `01_dati.ipynb` | Scarica, pulisce e unisce tutte le sorgenti. Produce le proteine, le osservazioni di localizzazione per fonte, i target ausiliari, le varianti. |
-| `02_embedding_modello.ipynb` | Calcola gli embedding ESM-2 e addestra il modello con grid search e cross-validation per omologia. Si confronta con DeepLoc 2.0 sul test indipendente HPA, valuta il sottoinsieme cerebrale e assegna un punteggio di mislocalizzazione alle varianti ClinVar. |
+Predizione probabilistica della **localizzazione subcellulare** di proteine umane espresse nel cervello, con un modello multi-modale che integra sequenza aminoacidica, testo funzionale, struttura 3D AlphaFold e annotazioni biologiche da 13 fonti sperimentali.
 
 ---
 
-## Indice
+## Descrizione
 
-1. [Obiettivo](#obiettivo)
-2. [Idee metodologiche](#idee-metodologiche)
-3. [Struttura del repository](#struttura-del-repository)
-4. [Installazione](#installazione)
-5. [Guida rapida](#guida-rapida)
-6. [Dati scaricati automaticamente](#dati-scaricati-automaticamente)
-7. [Dati da scaricare a mano](#dati-da-scaricare-a-mano)
-8. [Cosa succede nei due notebook](#cosa-succede-nei-due-notebook)
-9. [Output](#output)
-10. [Valutazione e confronto con lo stato dell'arte](#valutazione-e-confronto-con-lo-stato-dellarte)
-11. [Test interni](#test-interni)
-12. [Limiti noti](#limiti-noti)
-13. [Riferimenti](#riferimenti)
+Le malattie neurodegenerative (Alzheimer, Parkinson, SLA) sono spesso associate alla **mislocalization proteica**: proteine che si ritrovano in compartimenti cellulari anomali, dove formano aggregati tossici o perdono la loro funzione fisiologica. Predire *dove* una proteina cerebrale umana si localizza — e con quale probabilità — è il primo passo per capire dove il processo può andare storto.
+
+Questo progetto costruisce una pipeline end-to-end che:
+
+1. Raccoglie ed integra etichette di localizzazione da **13 fonti biologiche** (UniProt, HPA, DeepLoc, OpenCell, LOPIT, BioID, MitoCarta, SynGO, GOA e altre)
+2. Addestra **MM-CAN-SubCell** (*Multi-Modal Cross-Attention Network for Subcellular Localization*), un modello PyTorch che fonde embedding ESM-2, BioLinkBERT e feature strutturali AlphaFold tramite cross-attention
+3. Predice una **distribuzione di probabilità** su 14 compartimenti (9 organelli + 5 domini neuronali) per ogni proteina della coorte cerebrale umana
 
 ---
 
-## Obiettivo
-
-Le domande sono due:
-
-1. **Dove dovrebbe stare una proteina espressa nel cervello?** La risposta è una probabilità per ciascuno dei 9 compartimenti di DeepLoc 2.0 e per 4 compartimenti neuronali (assone, dendrite, presinapsi, postsinapsi).
-2. **Una variante missense sposta la proteina? E con quale meccanismo?** I meccanismi considerati sono la rottura del segnale di sorting, la perdita di inserzione in membrana e la destabilizzazione.
-
-## Idee metodologiche
-
-| # | Problema | Soluzione adottata |
-|---|---|---|
-| 1 | Le banche dati di localizzazione hanno affidabilità diverse (UniProt incompleto, HPA Approved meno solido, mappe neuronali di topo). | **Canale di rumore per fonte.** Il modello stima la localizzazione latente e osserva ogni fonte con una sensibilità e una specificità per classe, apprese dai dati e inizializzate dove la fonte si sovrappone a DeepLoc. DeepLoc è l'ancora sperimentale. |
-| 2 | Un compartimento non annotato non è necessariamente assente. | La sensibilità per fonte assorbe l'incompletezza. Per ogni fonte, un'assenza conta solo se la fonte sa misurare quel compartimento. |
-| 3 | I neuroni hanno compartimenti che le linee cellulari non hanno. | **Testa neuronale** separata (assone, dendrite, pre/post-sinapsi), addestrata solo sulle proteine espresse nei neuroni (HPA single-cell). |
-| 4 | Le feature annotate (PTM, NLS, TM...) contengono la risposta o non cambiano con la mutazione. | Diventano **target ausiliari multi-task**: il modello le deve prevedere dalla sola sequenza. Sul mutante, la loro variazione indica il meccanismo rotto. |
-| 5 | La media dell'embedding su tutta la proteina non sente una singola sostituzione. | **Vista locale** di ±15 residui attorno alla variante, confrontata tra WT e mutante. |
-| 6 | La mislocalizzazione patogenica dipende soprattutto da stabilità e inserzione in membrana (Lacoste et al., 2024). | **LLR di ESM** come proxy di stabilità e **ΔΔG di inserzione in membrana** (scala di Hessa) nei tratti TM. |
-| 7 | Una variante patogenica in ClinVar non è necessariamente mislocalizzata. | ClinVar serve come supervisione debole. Le varianti con localizzazione misurata servono solo per valutare. |
-| 8 | Bisogna misurare il guadagno senza contaminare il confronto. | Pool **`oro+fonti`**: stesse proteine di DeepLoc, più fonti di etichette. Il test HPA resta intatto. |
-| 9 | Le probabilità devono essere affidabili. | **Soglie conformali** per classe, con un obiettivo di copertura del 90% verificato sul test. |
-
-Altre scelte:
-- **Split per omologia.** Si usano le 5 partizioni ufficiali di DeepLoc (≤30% di identità); le proteine aggiunte ereditano la partizione della proteina DeepLoc più simile.
-- **Embedding.** ESM-2 con 5 riassunti per sequenza: media dell'ultimo layer, media del layer a 2/3, max, primi 40 e ultimi 40 residui.
-- **Ensemble.** k-NN sugli embedding e soglie per classe, tutto scelto sulle predizioni out-of-fold.
-
-## Struttura del repository
+## Struttura della repository
 
 ```
-.
-├── 01_dati.ipynb
-├── 02_embedding_modello.ipynb
-├── README.md
+Brain-proteins-miss-localization/
+│
+├── try_01/
+│   ├── 01_data_brain.ipynb                              # Pipeline dati: download, preprocessing, etichette
+│   ├── 02_modeling.ipynb                                # Architettura MM-CAN-SubCell, training, valutazione
+│   ├── schema-workflow-01-dati-cervello-umano.html      # Schema interattivo workflow dati
+│   └── schema-workflow-02-modeling-mm-can-subcell.html  # Schema interattivo workflow modeling
+│
+├── data/                              # Generata da 01_dati (non inclusa nel repo)
+│   ├── proteine.parquet               # Coorte cerebrale + feature + card_protein
+│   ├── osservazioni.parquet           # Tabella lunga proteina × fonte × classe
+│   ├── config_dati.json               # Metadati classi e fonti
+│   ├── embeddings/                    # Embedding ESM-2 e BioLinkBERT (cache NPY)
+│   └── eda_classi.png                 # Distribuzione positivi per classe
+│
+├── cache/                             # File scaricati automaticamente da 01_dati
+│   ├── alphafold/                     # Strutture PDB per proteina (cache locale)
+│   ├── mitocarta3.xlsx                # Download manuale (Broad Institute)
+│   └── ...
+│
+├── models/                            # Checkpoint PyTorch (generati da 02_modeling)
+│   ├── mm_can_subcell_best.pt
+│   └── baselines/
+│
+├── figures/                           # Figure di valutazione (generate da 02_modeling)
+│   ├── roc_comparison_final.png
+│   ├── umap_mmcan_subcell.png
+│   └── confusion_matrix_mmcan.png
+│
+├── results/
+│   └── metrics_comparison.csv        # Tabella comparativa tutti i modelli
+│
 ├── requirements.txt
-├── .gitignore
-├── cache/                    # download automatici (creata dal notebook 01, esclusa da git)
-└── data/                     # tabelle intermedie, embedding e risultati (esclusa da git)
-    └── esterni/
-        ├── syngo_ontologies.xlsx   # (facoltativo) dal bulk download di SynGO
-        ├── fonti/            # CSV scaricati e convertiti a mano (gene, classe)
-        └── varianti/         # CSV di varianti con localizzazione misurata (gene, variante, mislocalizzata)
+└── README.md
 ```
 
-## Installazione
+---
 
-Serve Python ≥ 3.10.
+## Workflow — Pipeline dei Dati (`01_dati_cervello_umano.ipynb`)
 
-```bash
-git clone <url-del-repository>
-cd <cartella>
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
+Il notebook costruisce la coorte cerebrale umana a partire da zero, scaricando e integrando 13+ fonti biologiche. L'output è un insieme di file Parquet pronti per il modeling.
 
-**Hardware:**
-- Con GPU (≥ 12 GB) l'intero progetto con ESM-2 650M richiede poche ore.
-- Su sola CPU, nel notebook 02 imposta `ESM = 'facebook/esm2_t30_150M_UR50D'` e `N_CONFIGS = 4`.
+### Schema interattivo
 
-Su disco servono circa 1 GB per le cache e 1–2 GB per gli embedding.
+> 📊 **[Apri lo schema completo del workflow dati](try_01/schema-workflow-01-dati-cervello-umano.html)**
+>
+> Lo schema illustra tutti gli 11 step del notebook: configurazione, download fonti, costruzione osservazioni multi-fonte, GOA sperimentale, funnel dei filtri, feature AlphaFold, `card_protein` e salvataggio.
 
-## Guida rapida
+### Passaggi principali
 
-1. **(Opzionale ma consigliato)** Scarica `syngo_ontologies.xlsx` da SynGO e mettilo in `data/esterni/` (vedi [Dati da scaricare a mano](#dati-da-scaricare-a-mano)). Le altre fonti manuali sono facoltative.
-2. Esegui `01_dati.ipynb` dall'inizio alla fine. Il primo avvio scarica circa 600 MB; le esecuzioni successive usano `cache/`.
-3. Esegui `02_embedding_modello.ipynb`. Il calcolo degli embedding si può interrompere e riprende da dove si era fermato.
-4. Leggi i risultati in `data/` (vedi [Output](#output)).
+#### 1. Configurazione e download fonti
 
-> Se cambi l'elenco delle sequenze (per esempio `MAX_VARIANTS`, oppure aggiungi fonti che fanno entrare nuove proteine), cancella `data/emb_*` e `data/res_*` prima di rieseguire il notebook 02.
+- Definizione delle **14 classi target**: 9 organelli (Asse A, distribuzione normalizzata) + 5 domini neuronali (Asse B, probabilità indipendenti)
+- Download automatico con retry su errori HTTP (429/5xx) e scrittura atomica (`.part` → rinomina)
+- Fonti opzionali (GOA, SynGO, fonti esterne CSV) non bloccano l'esecuzione se assenti
+- **Download manuale richiesto**: `cache/mitocarta3.xlsx` da [broadinstitute.org/mitocarta](https://www.broadinstitute.org/mitocarta)
 
-## Dati scaricati automaticamente
+#### 2. Universo proteico: UniProt + DeepLoc filtrato
 
-| Sorgente | Uso | Link |
+- UniProt reviewed, `organism:9606`, non-fragment → **20.430 proteine**
+- DeepLoc 2.0 (28.303 voci) filtrato per sequenza identica a UniProt umano → **6.755 umane** (le specie non umane escono: domini diversi di curatela)
+- Costruzione del dizionario `simbolo genico → UniProt` (ufficiale + alias non ambigui) e `sequenza → UniProt`
+- Test HPA DeepLoc (1.717 proteine) **isolato immediatamente** come set di test indipendente: non entra mai nelle osservazioni di addestramento
+
+#### 3. Osservazioni multi-fonte → tabella lunga
+
+Per ogni fonte viene costruita una tabella `(proteina, fonte, classe) → 1/0` rispettando la **regola delle assenze**: una fonte produce `0` solo per le proteine che riporta e per le classi che sa misurare.
+
+| Fonte | Classi coperte | Tipo di evidenza |
 |---|---|---|
-| DeepLoc 2.0 – SwissProt (training, 5 partizioni di omologia) | Etichette sperimentali "oro" | [Swissprot_Train_Validation_dataset.csv](https://services.healthtech.dtu.dk/services/DeepLoc-2.0/data/Swissprot_Train_Validation_dataset.csv) |
-| DeepLoc 2.0 – test HPA indipendente | Test finale, confronto con lo stato dell'arte | [hpa_testset.csv](https://services.healthtech.dtu.dk/services/DeepLoc-2.0/data/hpa_testset.csv) |
-| UniProt umano (reviewed) | Sequenze, localizzazione con codici ECO, peptide segnale/TM/lipidazione, PTM, funzione, malattia, PDB | [rest.uniprot.org](https://rest.uniprot.org/) |
-| UniProt, query "cervello" | Flag `is_brain` | idem |
-| HPA – subcellular location | Etichette (Enhanced/Supported/Approved), multi-localizzazione | [subcellular_location.tsv.zip](https://www.proteinatlas.org/download/tsv/subcellular_location.tsv.zip) |
-| HPA – RNA tissue consensus | Espressione nei tessuti cerebrali | [rna_tissue_consensus.tsv.zip](https://www.proteinatlas.org/download/tsv/rna_tissue_consensus.tsv.zip) |
-| HPA – RNA single cell type | Espressione in neuroni e glia (testa neuronale) | [rna_single_cell_type.tsv.zip](https://www.proteinatlas.org/download/tsv/rna_single_cell_type.tsv.zip) |
-| MitoCarta 3.0 | Inventario mitocondriale | [human.mitocarta3.0.html](https://www.broadinstitute.org/files/shared/metabolism/mitocarta/human.mitocarta3.0.html) |
-| SynaptopathyDB | Target ausiliario "sinaptopatia" | [API genes](https://www.synaptopathydb.org/api/genes) |
-| OpenCell | Localizzazione da tagging endogeno (gradi 3 e 2; il grado 1 resta "non osservato") | [opencell-localization-annotations.csv](https://opencell.sf.czbiohub.org/data/datasets/opencell-localization-annotations.csv) |
-| ClinVar | Varianti missense (P/LP, B/LB, VUS) | [variant_summary.txt.gz](https://ftp.ncbi.nlm.nih.gov/pub/clinvar/tab_delimited/variant_summary.txt.gz) |
+| UniProt forte | tutti gli organelli + domini neuronali | ECO sperimentale (ECO:0000269, ECO:0000314…) |
+| UniProt debole | tutti gli organelli + domini neuronali | inferenza / similarità |
+| HPA alta / approved | 8 organelli (no extracellulare) | microscopia IHC |
+| MitoCarta 3.0 | solo Mitocondri | inventario completo → zeri affidabili |
+| OpenCell | 8 organelli | live cell imaging HEK293T |
+| SynGO | Presinapsi / Postsinapsi | curato manuale |
+| GOA sperimentale | tutti (14 classi) | solo positivi (mondo aperto, mai zeri) |
+| LOPIT ×3 | 8 organelli | SVM su profili di frazionamento (p ≥ 0.7) |
+| BioID | 8 organelli | prossimità APEX/BioID NMF |
+| DeepLoc (umane) | 9 organelli | dataset oro |
+| Fonti esterne CSV | Assone / Dendrite / Presinapsi… | proteomiche iPSC (manuali) |
 
-## Dati da scaricare a mano
+> **GOA sperimentale** è la novità principale rispetto alla versione precedente: propaga le annotazioni lungo il grafo ontologico (`is_a` + `part_of`), esclude esosomi (GO:0070062) e porta 53+ proteine assonali, 67 dendritiche, 47 presinaptiche — il minimo critico per apprendere segnali di targeting specifici nei domini neuronali.
 
-Sono tutti **facoltativi**: senza di loro il progetto gira. Servono a dare più dati alla testa neuronale e una verità sperimentale per valutare le varianti.
+#### 4. Espressione cerebrale ed esclusione del sangue
 
-### 1. SynGO → presinapsi / postsinapsi (consigliato, 5 minuti)
+- **HPA RNA tessuto**: 15 regioni cerebrali, soglia `nTPM ≥ 10`
+- **HPA single-cell**: neuroni, astrociti, oligodendrociti, microglia, soglia `nCPM ≥ 5`
+- **Sangue escluso dalla coorte**: secretoma epatico + cellule ematiche arricchite senza espressione cerebrale + emoglobine (regex `HB*`) → **2.781 proteine rimosse**
+- Quote di frazionamento citosolico/nucleare da Hein 2024 (HEK293T) e Itzhak 2016 (HeLa): 9.438 proteine (nota: linee tumorali, non neuroni)
 
-Il notebook lo converte da solo.
+#### 5. Funnel dei filtri → coorte finale
 
-1. Apri <https://www.syngoportal.org>. È un sito di ricerca: la ricerca non ti serve, cerca invece nel menu la voce **Data / Downloads**.
-2. Clicca **"bulk download SynGO release …"**, prendendo la release più recente (per esempio `SynGO_bulk_download_release_20231201.zip`).
-3. Scompatta lo zip e copia **`syngo_ontologies.xlsx`** in `data/esterni/`.
-
-Il notebook 01 tiene solo i termini di componente cellulare (CC):
-- quelli che contengono *presynap*, *synaptic vesicle* o *active zone* diventano `Presinapsi`;
-- quelli che contengono *postsynap* diventano `Postsinapsi`.
-
-### 2. OpenCell → già automatico
-
-Non devi scaricare niente. Il notebook 01 prende da solo **Protein localization annotations (CSV)**:
-<https://opencell.sf.czbiohub.org/data/datasets/opencell-localization-annotations.csv>
-
-Gli altri file della pagina di download OpenCell (metadata della libreria, abbondanze proteiche, interazioni, dati grezzi) **non servono**.
-
-### 3. Mappa spaziale di neuroni primari di topo — Itzhak et al., Cell Reports 2017
-
-1. Apri l'articolo (open access): <https://doi.org/10.1016/j.celrep.2017.08.063>.
-2. In fondo alla pagina, nella sezione **Supplemental Information**, scarica le tabelle Excel.
-3. Cerca la tabella con **una riga per proteina** e l'**organello assegnato** nei neuroni. Ti servono una colonna con il simbolo genico e una con la predizione o classe di compartimento.
-4. Mappa i compartimenti così:
-
-   | Nome nella tabella (indicativo) | `classe` |
-   |---|---|
-   | Nucleus / Nuclear | `Nucleus` |
-   | Cytosol | `Cytoplasm` |
-   | Plasma membrane | `Cell membrane` |
-   | ER | `Endoplasmic reticulum` |
-   | Golgi | `Golgi apparatus` |
-   | Mitochondria | `Mitochondrion` |
-   | Lysosome | `Lysosome/Vacuole` |
-   | Peroxisome | `Peroxisome` |
-
-   Scarta gli altri: complessi grandi, endosomi, vescicole sinaptiche, proteine senza assegnazione.
-5. Salva come `data/esterni/fonti/neuroni_itzhak.csv` (colonne `gene,classe`). I simboli di topo vanno bene così.
-
-### 4. Assone e compartimento somatodendritico — Hobson et al., eLife 2022
-
-1. Apri <https://elifesciences.org/articles/70921>.
-2. Nella sezione **Additional files / Supplementary files** (ci sono anche i *source data* delle figure), scarica le tabelle.
-3. Cerca gli elenchi di proteine **significativamente arricchite**:
-   - negli **assoni dopaminergici striatali** → `Assone`;
-   - nel **compartimento somatodendritico** (mesencefalo ventrale) → `Dendrite`. È un'approssimazione: questo compartimento include anche il soma.
-4. Salva come `data/esterni/fonti/assone_hobson.csv`.
-
-### 5. Varianti con localizzazione misurata — Lacoste et al., Cell 2024 (per la valutazione)
-
-1. Apri <https://doi.org/10.1016/j.cell.2024.09.003>; la versione open access è su [PMC11568917](https://pmc.ncbi.nlm.nih.gov/articles/PMC11568917).
-2. Nella sezione **Supplemental information**, scarica le tabelle Excel.
-3. Cerca la tabella con **una riga per variante**: gene, cambio amminoacidico, esito dell'imaging (mislocalizzata oppure come il wild-type).
-4. Crea `data/esterni/varianti/lacoste.csv` con:
-   - `gene`: simbolo;
-   - `variante`: formato breve, `p.Arg130Gly` → `R130G`;
-   - `mislocalizzata`: 1 o 0.
-
-> **Human Cell Map**: non è più usata. OpenCell e HPA coprono lo stesso ruolo (localizzazione sperimentale nelle cellule umane).
-
-### Formato dei file in `data/esterni/fonti/`
-
-```csv
-gene,classe
-TOMM20,Mitochondrion
-SNAP25,Presinapsi
+```
+UniProt umane reviewed          20.430
+→ lunghezza 41–12.000 aa        20.358
+→ senza sangue                  17.649
+→ espresse nel cervello         13.298   ← coorte finale
+  di cui addestrabili (≥1 obs)  13.043
+  di cui test HPA indipendente     255
 ```
 
-Valori ammessi per `classe`: `Cytoplasm`, `Nucleus`, `Extracellular`, `Cell membrane`, `Mitochondrion`, `Endoplasmic reticulum`, `Lysosome/Vacuole`, `Golgi apparatus`, `Peroxisome`, `Assone`, `Dendrite`, `Presinapsi`, `Postsinapsi`.
+Validazione con `assert`: nessun UniProt duplicato, sequenze solo AA canonici, nessun leak test→train, nessuna proteina del sangue residua, `obs ∈ {0.0, 1.0}`.
 
-Due regole:
-- Il nome del file diventa il nome della fonte, e il modello stima per ogni fonte quanto è affidabile.
-- Una proteina presente nel file è considerata **assente** dai compartimenti che la fonte usa altrove ma non le assegna. Metti quindi solo assegnazioni di cui la fonte è sicura.
+#### 6. Feature strutturali AlphaFold (23 colonne `af_*`)
 
-### Conversione con pandas (modello da adattare)
+Scaricate tramite API `alphafold.ebi.ac.uk` con 8 worker paralleli e cache locale (PDB per proteina). Le feature includono:
 
-Cambia `COL_GENE`, `COL_LOC` e `MAPPA` secondo la tabella che hai scaricato:
+- pLDDT medio, regionale (N/centro/C), per terminale C (ultimi 5 residui)
+- Frazioni di confidenza (very low / low / confident / very high)
+- Densità di contatto Cα, esposizione N10/C5, raggio di girazione normalizzato
+- Frazioni elica/foglietto, lunghezza massima regione disordinata, conteggio IDR ≥ 30 residui
+- Eliche lunghe idrofobiche (proxy TM), patch di lisine esposte (proxy M6P), idrofobiche superficiali
+- Flag `af_partial` (struttura con copertura < 90%)
 
-```python
-import pandas as pd
-raw = pd.read_excel('tabella_supplementare.xlsx', sheet_name=0)
-COL_GENE, COL_LOC = 'Gene names', 'Prediction'                    # nomi delle colonne nella tabella
-MAPPA = {'Nucleus': 'Nucleus', 'Cytosol': 'Cytoplasm', 'Plasma membrane': 'Cell membrane',
-         'ER': 'Endoplasmic reticulum', 'Golgi': 'Golgi apparatus', 'Mitochondria': 'Mitochondrion',
-         'Lysosome': 'Lysosome/Vacuole', 'Peroxisome': 'Peroxisome'}
-out = raw[[COL_GENE, COL_LOC]].rename(columns={COL_GENE: 'gene', COL_LOC: 'classe'})
-out['gene'] = out['gene'].astype(str).str.split(';').str[0]       # se ci sono più nomi, tengo il primo
-out['classe'] = out['classe'].map(MAPPA)
-out.dropna().drop_duplicates().to_csv('data/esterni/fonti/neuroni_itzhak.csv', index=False)
-```
+#### 7. `card_protein` — profilo testuale esperto
 
-## Cosa succede nei due notebook
+Sei sezioni estratte dai campi UniProt per ogni proteina:
 
-### `01_dati.ipynb`
+1. Identità & funzione (nome, famiglia, attività catalitica, via metabolica)
+2. Domini, motivi, ripetizioni, zinc finger, coiled-coil (campi FT)
+3. Malattie neurologiche associate (17 pattern classificatori: Alzheimer, Parkinson, SLA…)
+4. Regolazione, PTM, partner/complessi
+5. Espressione cerebrale (HPA tessuto + single-cell + specificità tissutale UniProt)
+6. Profilo esperto a regole: classe funzionale (20 categorie) + rilevanza neurologica + struttura AlphaFold
 
-1. **Download in cache** di tutte le sorgenti automatiche, con retry. I file parziali hanno estensione `.part`, così un download interrotto non lascia file corrotti.
-2. **DeepLoc**: training con partizioni di omologia e test HPA. Il test è collegato a UniProt per sequenza identica.
-3. **Osservazioni da UniProt.** Ogni frase `Termine {ECO:...}` viene mappata a una classe e divisa in due fonti:
-   - `uniprot_forte`: evidenza sperimentale o del curatore;
-   - `uniprot_debole`: per similarità o predetta.
+> **Anti-leakage**: `card_protein` rimuove tutte le frasi che nominano un compartimento cellulare, un segnale di targeting o una modificazione lipidica (regex su 40+ pattern). `card_full` conserva il testo integrale ed è usata nel notebook 02 per misurare il delta di prestazione dovuto a eventuale leakage.
 
-   La mappatura gestisce i casi difficili: "Cytoplasmic vesicle" non è citoplasma, "perinuclear region" non è nucleo, si usa solo l'isoforma canonica e le note libere vengono ignorate.
-4. **Osservazioni da HPA** (`hpa_alta`, `hpa_approved`), **OpenCell**, **SynGO**, **MitoCarta** e fonti esterne.
-5. **Regola delle assenze**, poi una tabella lunga `(proteina, fonte, classe, 0/1)`.
-6. **Feature ereditate da FFFFF.** Sono calcolate direttamente da UniProt, HPA e SynaptopathyDB:
-   - target ausiliari: peptide segnale, transit peptide, TM, ancore lipidiche, glicosilazione, NLS, multimero, PTM, aggregati, patologia cerebrale, sinaptopatia;
-   - contesto genico: multi-localizzazione, shuttle nucleo-citoplasma, struttura PDB, ruolo nel trafficking.
-7. **Flag `is_brain`** (query UniProt oppure nTPM cerebrale ≥ 10) e **`is_neuronal`** (nCPM neuronale ≥ 5).
-8. **ClinVar.** Solo missense su GRCh38 in proteine cerebrali, classi nette (le "conflicting" sono escluse). Una variante si tiene solo se il residuo WT coincide con la sequenza UniProt.
-
-### `02_embedding_modello.ipynb`
-
-1. Sequenze da codificare: proteine e mutanti. Le proteine oltre 1022 aa sono troncate tenendo i due terminali.
-2. Embedding ESM-2 su memmap ripartibili. Per le proteine con varianti salva anche gli embedding per-residuo e i log-prob.
-3. Feature biologiche dalla sequenza: idrofobicità e carica N-terminale, tratti TM, NLS, KDEL, PTS1, CAAX, miristoilazione.
-4. Tensore delle osservazioni `[proteina, fonte, classe]`, partizioni e controlli:
-   - nessuna sequenza del test nel training;
-   - vicinanza tra test e training;
-   - copertura delle fonti.
-5. **Grid search** con CV a 5 fold sulle partizioni di omologia. Quattro pool:
-
-   | Pool | Proteine | Fonti | Canale |
-   |---|---|---|---|
-   | `oro` | DeepLoc | solo DeepLoc | — |
-   | `oro+fonti` | DeepLoc | tutte | attivo |
-   | `esteso` (`rumore=0`) | DeepLoc + umane aggiunte | tutte | fusione ingenua |
-   | `esteso` (`rumore=1`) | DeepLoc + umane aggiunte | tutte | attivo |
-
-6. Ablazioni e **tabella di affidabilità delle fonti** (sensibilità e specificità stimate).
-7. Ensemble dei run migliori, k-NN, soglie MCC, soglie riscalate per il Jaccard e soglie conformali.
-8. **Confronto con DeepLoc 2.0** sul test HPA.
-9. Valutazione su **cervello** e **compartimenti neuronali**, e tabella delle probabilità per proteina.
-10. **Varianti.** Calcola JSD tra WT e mutante, Δ dei compartimenti neuronali, Δ delle teste di meccanismo, spostamento locale, LLR, ΔΔG di inserzione e contesto. Produce due punteggi:
-    - non supervisionato (`score_misloc`);
-    - supervisionato su ClinVar, con CV raggruppata per gene (`score_supervisionato`).
-
-    Riporta anche l'AUROC su ClinVar e sulle varianti misurate.
-
-## Output
+#### Output del notebook 01
 
 | File | Contenuto |
 |---|---|
-| `data/proteine.parquet` | Proteine, sequenze, flag cerebrali/neuronali, target ausiliari, contesto |
-| `data/osservazioni.parquet` | Osservazioni `(pid, fonte, classe, obs)` |
-| `data/clinvar_missense.parquet` | Varianti ClinVar filtrate |
-| `data/confronto_stato_arte.xlsx` | Metriche sul test HPA accanto a DeepLoc 2.0 |
-| `data/probabilita_proteine_cervello.xlsx` | Per ogni proteina cerebrale: probabilità per compartimento, profilo %, compartimenti predetti, insieme conformale al 90% |
-| `data/varianti_mislocalizzazione.xlsx` | Per ogni variante: tutti i segnali, meccanismo principale, i due punteggi |
-
-## Valutazione e confronto con lo stato dell'arte
-
-Il protocollo è identico a quello di DeepLoc 2.0:
-- training sulle 5 partizioni SwissProt;
-- soglie per classe scelte sul training;
-- metriche sulle 6 classi HPA.
-
-Il test HPA non viene mai usato per scegliere iperparametri, soglie o pesi.
-
-Valori pubblicati da battere (Thumuluri et al., NAR 2022, Tabella 2):
-
-| Modello | Accuracy | Jaccard | Micro F1 | Macro F1 |
-|---|---|---|---|---|
-| DeepLoc 2.0 (ESM1b) | 0.34 | 0.48 | 0.57 | 0.44 |
-| DeepLoc 2.0 (ProtT5) | 0.39 | 0.53 | 0.60 | 0.46 |
-| Light Attention (ProtT5) | 0.45 | 0.52 | 0.56 | 0.43 |
-
-Il notebook riporta due punti operativi:
-- **soglie MCC**, come DeepLoc;
-- **soglie Jaccard**, che riportano il numero medio di etichette per proteina vicino a quello reale.
-
-## Test interni
-
-Il codice è stato eseguito end-to-end su dati finti ma con i formati reali delle sorgenti, costruiti con casi difficili e scenari pianificati. Al posto di ESM-2 c'era uno stub, quindi **questi numeri verificano la metodologia, non le prestazioni finali**.
-
-| Verifica | Esito |
-|---|---|
-| Parsing UniProt (perinucleare, vescicole, isoforme, note, evidenze ECO), alias HPA, duplicati | corretto |
-| ClinVar: esclusione di conflicting, GRCh37, nonsense, residuo WT errato | corretto |
-| Canale di rumore contro fusione ingenua (macro-AUPRC CV sulle etichette DeepLoc) | 0.508 contro 0.484 (protocollo DeepLoc: 0.495) |
-| Proteine note solo tramite fonti rumorose, contro la verità nascosta | 0.517 contro 0.496 |
-| Il canale distingue una fonte buona da una rumorosa | sì: sens/spec 0.87/0.96 contro 0.74/0.77 |
-| Target ausiliari multi-task | 0.499 contro 0.492 senza |
-| Varianti pianificate (rottura del peptide segnale o dell'elica TM) | AUROC 0.96–0.99 (JSD, Δ meccanismo); il meccanismo principale è identificato correttamente |
-| Copertura conformale sul test | 0.88 con obiettivo 0.90 |
-
-## Limiti noti
-
-- **Spostamento di distribuzione e conformale.** Il test HPA è ridotto per omologia rispetto al training, quindi la copertura conformale scende leggermente sotto l'obiettivo. Per una garanzia più stretta abbassa `EPS`.
-- **Probabilità latenti nei pool multi-fonte.** Possono risultare poco calibrate. La scala delle soglie tende al bordo della griglia: controlla la stampa della sezione 7.
-- **Golgi e lisosoma.** Restano le classi più difficili, come per tutti i metodi pubblicati.
-- **Fonti di topo.** Le mappe neuronali di topo usano l'ortologia per simbolo genico: è un'approssimazione, e il canale di rumore ne stima l'affidabilità.
-- **Isoforme.** Si usa solo l'isoforma canonica UniProt. Le isoforme specifiche del cervello (microesoni) non sono modellate.
-- **Proxy di stabilità.** L'LLR di ESM è un proxy della stabilità, non una misura di ΔΔG di folding.
-
-## Riferimenti
-
-- Thumuluri V. et al. *DeepLoc 2.0: multi-label subcellular localization prediction using protein language models.* Nucleic Acids Research, 2022. [Dati](https://services.healthtech.dtu.dk/services/DeepLoc-2.0/4-Data.php)
-- Stärk H. et al. *Light attention predicts protein location from the language of life.* Bioinformatics Advances, 2021. [Codice](https://github.com/HannesStark/protein-localization)
-- Lin Z. et al. *Evolutionary-scale prediction of atomic-level protein structure with a language model* (ESM-2). Science, 2023.
-- Lacoste J. et al. *Pervasive mislocalization of pathogenic coding variants underlying human disorders.* Cell, 2024. [doi](https://doi.org/10.1016/j.cell.2024.09.003)
-- Brandes N. et al. *Genome-wide prediction of disease variant effects with a deep protein language model.* Nature Genetics, 2023.
-- Hessa T. et al. *Recognition of transmembrane helices by the endoplasmic reticulum translocon.* Nature, 2005.
-- Itzhak D. N. et al. *A mass spectrometry-based approach for mapping protein subcellular localization reveals the spatial proteome of mouse primary neurons.* Cell Reports, 2017.
-- Hobson B. D. et al. *Subcellular proteomics of dopamine neurons in the mouse brain.* eLife, 2022.
-- Koopmans F. et al. *SynGO: an evidence-based, expert-curated knowledge base for the synapse.* Neuron, 2019.
-- Cho N. H. et al. *OpenCell: endogenous tagging for the cartography of human cellular organization.* Science, 2022.
-- Rath S. et al. *MitoCarta3.0.* Nucleic Acids Research, 2021.
-- Dawid A. P., Skene A. M. *Maximum likelihood estimation of observer error-rates using the EM algorithm.* JRSS C, 1979.
+| `data/proteine.parquet` | 13.298 proteine · pid, uniprot_id, gene, sequence, role, has\_label, is\_brain/neuronal/oligo, frac\_cyto/nuc, card\_protein/full, af\_\*, aux\_\*, ctx\_\* |
+| `data/osservazioni.parquet` | 439.719 righe · pid, uniprot\_id, fonte, classe, obs (0.0/1.0) |
+| `data/config_dati.json` | Metadati: classi, fonti positive, organelli, domini neuronali |
+| `data/eda_classi.png` | Distribuzione positivi per classe e per fonte |
 
 ---
 
-**Autore:** `<Nome Cognome>` — Università degli Studi di Salerno
-**Licenza:** `<da scegliere, es. MIT>`
+## Workflow — Modeling (`02_modeling.ipynb`)
+
+Il notebook addestra **MM-CAN-SubCell** e lo confronta con quattro baseline.
+
+### Schema interattivo
+
+> 📊 **[Apri lo schema completo del workflow di modeling](try_01/schema-workflow-02-modeling-mm-can-subcell.html)**
+>
+> Lo schema illustra i 10 step del notebook: setup, soft labels, embedding multi-modali, architettura MM-CAN-SubCell, training, 5-fold CV, confronto baseline, figure ROC, UMAP e output predittivo.
+
+### Architettura MM-CAN-SubCell
+
+Il modello fonde **quattro modalità** con un meccanismo di cross-attention:
+
+```
+RAMO A  ESM-2 seq. completa   →  E_seq  ∈ R^D_esm
+RAMO B  ESM-2 frammenti N/C/M →  E_frag ∈ R^(3·D_esm)
+RAMO C  BioLinkBERT card_prot →  E_text ∈ R^1024
+RAMO D  Feature AlphaFold+aux →  F_struct ∈ R^D_struct
+
+        Projection Layer (Linear + LayerNorm + GELU per ogni ramo)
+                          ↓
+        CROSS-ATTENTION (8 heads)
+        Q = H_text  |  K = V = mean(H_seq, H_frag)
+        Attended = LayerNorm(attn_out + H_text)    [residual]
+                          ↓
+        FUSION: Concat([Attended · H_text · H_struct])  →  1088-dim
+        Linear(1088→512) + LN + GELU → Linear(512→256) + LN + GELU
+                          ↓
+        OUTPUT HEAD: Linear(256 → N_CLASSI) → Softmax
+        p = [p₁, …, pC]   con  Σpᵢ = 1.0
+```
+
+**Giustificazione della cross-attention**: il testo funzionale (Q) interroga selettivamente i pattern di sequenza (K/V) più informativi per ciascun compartimento, catturando correlazioni cross-modali non accessibili ai modelli mono-modali.
+
+### Soft labels — distribuzioni morbide
+
+Le etichette non sono classi discrete ma **distribuzioni di probabilità** costruite come media pesata delle osservazioni multi-fonte:
+
+```
+ŷ_c = Σ_f (w_f · obs_{f,c}) / Σ_f (w_f · 𝟙[f misura c])
+```
+
+I pesi riflettono la specificità stimata di ogni fonte (DeepLoc = 1.0, SynGO = 1.0, UniProt forte = 0.95, … , UniProt debole = 0.50). Le distribuzioni degli organelli sono normalizzate a somma=1; i domini neuronali sono probabilità indipendenti clippate in [0,1]. Label smoothing ε=0.05 per distribuzioni quasi-one-hot.
+
+### Loss function
+
+```
+𝓛 = KL(y ‖ ŷ) + λ · Σ (1−ŷᵢ)^γ · log(ŷᵢ)   [λ=0.1, γ=2]
+```
+
+KL divergence per le distribuzioni morbide + componente Focal per gestire le classi minoritarie.
+
+### Training
+
+| Iperparametro | Valore |
+|---|---|
+| Ottimizzatore | AdamW · lr=3e-4 · weight\_decay=1e-4 |
+| Scheduler | Linear warm-up (5 epoche) → CosineAnnealingWarmRestarts (T₀=10) |
+| Epoche massime | 80 con early stopping (patience=15 su val\_KL) |
+| Batch size effettivo | 128 (32 × gradient accumulation ×4) |
+| Regularizzazione | Dropout 0.3 · Stochastic Depth 0.1 · Gradient clipping max\_norm=1.0 |
+| Precisione | AMP autocast (float16 su CUDA) |
+| Split | Stratificato 70/15/15 per classe primaria degli organelli |
+| Cross-validation | 5-fold stratificata |
+
+### Baseline a confronto
+
+| Modello | Input | Note |
+|---|---|---|
+| Dummy majority | — | lower bound |
+| Logistic Regression | ESM + BERT + struct → PCA 256D | solver SAGA, multinomial |
+| Random Forest (500 alberi) | PCA 128D | max\_depth=20, class\_weight=balanced |
+| MLP semplice (3 hidden layers) | concat flat, senza cross-attention | stessa loss KL+Focal |
+| **MM-CAN-SubCell** | 4 rami + cross-attention | modello proposto |
+
+### Figure di output
+
+- `figures/roc_comparison_final.png` — curva ROC macro-averaged obbligatoria (5 modelli sovrapposti)
+- `figures/roc_per_compartimento.png` — subplot ROC per ogni compartimento
+- `figures/precision_recall.png` — curve Precision-Recall per compartimento
+- `figures/confusion_matrix_mmcan.png` — matrice di confusione MM-CAN-SubCell
+- `figures/umap_mmcan_subcell.png` — UMAP del penultimo strato 256-dim
+- `figures/MM_CAN_SubCell_architecture.png` — schema architetturale
+- `figures/training_curve_mmcan.png` — curve di loss train/val per epoca
+
+---
+
+## Requisiti e installazione
+
+### Dipendenze Python
+
+```
+Python ≥ 3.10
+PyTorch ≥ 2.1.0
+fair-esm ≥ 2.0.0
+transformers ≥ 4.35.0
+scikit-learn ≥ 1.3.0
+biopython ≥ 1.81
+umap-learn ≥ 0.5.3
+pandas
+numpy
+scipy
+pyarrow
+requests
+matplotlib
+seaborn
+openpyxl
+```
+
+### Installazione
+
+```bash
+# Clona la repository
+git clone https://github.com/tuonome/Brain-miss-localization.git
+cd Brain-miss-localization
+
+# Crea un ambiente virtuale (consigliato)
+python -m venv venv
+source venv/bin/activate        # Linux/macOS
+# oppure: venv\Scripts\activate  # Windows
+
+# Installa le dipendenze
+pip install -r requirements.txt
+```
+
+> **Nota GPU**: il training richiede una GPU con almeno 8 GB di VRAM (testato su GTX 1080). Su CPU il calcolo degli embedding ESM-2 può richiedere diverse ore. Su Google Colab Pro (T4) il training completo impiega circa 2–3 ore.
+
+---
+
+## Come riprodurre i risultati
+
+Eseguire i notebook **nell'ordine indicato**:
+
+### Step 1 — Download manuale prerequisiti
+
+Prima di avviare il notebook 01, scaricare manualmente:
+
+| File | Fonte | Destinazione |
+|---|---|---|
+| `Human MitoCarta3.0` (`.xlsx`) | [broadinstitute.org/mitocarta](https://www.broadinstitute.org/mitocarta) | `cache/mitocarta3.xlsx` |
+| `SynGO ontologies` (`.xlsx`) | [syngoportal.org](https://www.syngoportal.org) | `data/esterni/syngo_ontologies.xlsx` |
+| Fonti neuronali opzionali | Supplementi pubblicazioni (vedi notebook) | `data/esterni/fonti/<nome>.csv` |
+
+### Step 2 — Pipeline dati
+
+```bash
+jupyter notebook try_01/01_data_brain.ipynb
+```
+
+Eseguire tutte le celle in ordine. Il notebook scarica automaticamente tutte le altre fonti, calcola le feature AlphaFold (alcune ore la prima volta, poi cache), costruisce le `card_protein` e salva i file Parquet in `data/`.
+
+### Step 3 — Modeling
+
+```bash
+jupyter notebook try_01/02_modeling.ipynb
+```
+
+Eseguire tutte le celle in ordine. Gli embedding ESM-2 e BioLinkBERT vengono calcolati la prima volta e salvati in `data/embeddings/` per i run successivi.
+
+> Tutti i risultati sono riproducibili con `SEED=42` e le versioni di libreria specificate in `requirements.txt`.
+
+---
+
+## Fonti dati
+
+| Fonte | Tipo | URL |
+|---|---|---|
+| **UniProt** (reviewed, human) | Localizzazione subcellulare + sequenza + annotazioni | [uniprot.org](https://www.uniprot.org) |
+| **DeepLoc 2.0** | Dataset oro train/test per localizzazione | [services.healthtech.dtu.dk](https://services.healthtech.dtu.dk/services/DeepLoc-2.0/) |
+| **Human Protein Atlas (HPA)** | Microscopia IHC, RNA tessuto, RNA single-cell | [proteinatlas.org](https://www.proteinatlas.org) |
+| **OpenCell** | Live cell imaging (HEK293T, tag endogeno) | [opencell.czbiohub.org](https://opencell.czbiohub.org) |
+| **LOPIT** (×3) | Proteomica spaziale per frazionamento | [github.com/czbiohub-sf/Organelle\_IP](https://github.com/czbiohub-sf/Organelle_IP_analyses_and_figures) |
+| **BioID 2021** | Prossimità APEX2/BioID NMF | idem |
+| **MitoCarta 3.0** | Inventario completo proteoma mitocondriale umano | [broadinstitute.org/mitocarta](https://www.broadinstitute.org/mitocarta) |
+| **SynGO** | Proteine sinaptiche curate manualmente | [syngoportal.org](https://www.syngoportal.org) |
+| **Gene Ontology (GOA)** | Annotazioni sperimentali compartimento cellulare | [geneontology.org](https://geneontology.org) |
+| **AlphaFold DB** | Strutture 3D predette per proteoma umano | [alphafold.ebi.ac.uk](https://alphafold.ebi.ac.uk) |
+| **SynaptoPathyDB** | Geni associati a sinaptopatia | [synaptopathydb.org](https://www.synaptopathydb.org) |
+| **Hein et al. 2024** | Frazionamento citosol/nucleo HEK293T | [github.com/czbiohub-sf/Organelle\_IP](https://github.com/czbiohub-sf/Organelle_IP_analyses_and_figures) |
+| **Itzhak et al. 2016** | Frazionamento spaziale HeLa (eLife) | idem |
+
+---
+
+## Citazioni principali
+
+- Lin et al. (2023) *Science* — ESM-2: Language models of protein sequences at the scale of evolution enable accurate structure prediction
+- Yasunaga et al. (2022) — BioLinkBERT: Pretraining Language Models with Document Links
+- Thumuluri et al. (2022) *Nucleic Acids Research* — DeepLoc 2.0: multi-label subcellular localization prediction using protein language models
+- Almagro Armenteros et al. (2019) *Nature Methods* — SignalP 5.0 / TargetP 2.0: N-terminal sequence signals
+- Geng (2016) *IEEE TNNLS* — Label Distribution Learning
+- Hinton et al. (2015) — Distilling the Knowledge in a Neural Network (label smoothing / KL divergence)
+- Lin et al. (2017) *ICCV* — Focal Loss for Dense Object Detection
+
+---
+
+## Licenza
+
+Questo progetto è rilasciato sotto licenza **MIT**. Vedi il file [`LICENSE`](LICENSE) per i dettagli.
+
+Le fonti dati utilizzate hanno licenze proprie: UniProt (CC BY 4.0), HPA (CC BY-SA 3.0), OpenCell (BSD), GOA (CC BY 4.0), AlphaFold DB (CC BY 4.0). MitoCarta e SynGO richiedono il download diretto dai rispettivi siti con accettazione dei termini di utilizzo.
