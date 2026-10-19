@@ -23,7 +23,7 @@ Sapere che una proteina "è nel citoplasma" non dice nulla al neurologo che vuol
 
 NeuroLoc-Δ estende la classificazione standard a **14 compartimenti**, aggiungendo 5 classi neuronali specifiche. È addestrato esclusivamente su proteine umane espresse nel cervello, escludendo contaminanti plasmatici e ottimizzando lo spazio di rappresentazione per il dominio neurologico.
 
-Il sistema include inoltre il modulo **NeuroLoc-Δ** propriamente detto: dato una variante missense (ad es. da ClinVar), predice se e come quella sostituzione amminoacidica altera il profilo di localizzazione della proteina, identificando il meccanismo molecolare rotto (perdita del ligando PDZ, destabilizzazione di un'elica transmembrana, alterazione della presequenza mitocondriale, ecc.).
+Il sistema include inoltre il modulo **NeuroLoc-Δ** propriamente detto: data una variante missense (ad es. da ClinVar), predice se e come quella sostituzione amminoacidica altera il profilo di localizzazione della proteina, identificando il meccanismo molecolare rotto (perdita del ligando PDZ, destabilizzazione di un'elica transmembrana, alterazione della presequenza mitocondriale, ecc.).
 
 ---
 
@@ -77,7 +77,7 @@ Per ogni proteina viene costruita una **scheda testuale funzionale** (`card_prot
 
 La scheda viene codificata da **PubMedBERT** (`NeuML/pubmedbert-base-embeddings`), un modello addestrato su coppie di frasi di PubMed, producendo un vettore da 768 dimensioni. Le schede più lunghe di 512 token vengono lette a blocchi sovrapposti (overlap 64 token) e mediate.
 
-**Precauzione critica contro il data leakage:** dalla scheda vengono rimosse sistematicamente tutte le parole che nominano compartimenti o processi di localizzazione (≈80 pattern: "nuclear", "mitochondrial", "axon*", "synap*", "signal peptide", "transmembrane", ecc.). Senza questa pulizia, il modello leggerebbe direttamente la risposta: test interni mostrano che con i nomi non ripuliti il guadagno apparente raddoppia ma metà è spiegato dalla parola "Mitochondrial" nel nome della proteina.
+**Precauzione critica contro il data leakage:** dalla scheda vengono rimosse sistematicamente tutte le parole che nominano compartimenti o processi di localizzazione (≈80 pattern: `nuclear`, `mitochondrial`, `axon*`, `synap*`, `signal peptide`, `transmembrane`, ecc.). Senza questa pulizia, il modello leggerebbe direttamente la risposta: test interni mostrano che con i nomi non ripuliti il guadagno apparente raddoppia, ma metà è spiegato dalla parola "Mitochondrial" nel nome della proteina.
 
 L'aggiunta del testo ripulito vale circa **+4 punti di macro-AUPRC** rispetto alla sola sequenza.
 
@@ -89,7 +89,7 @@ Per ogni proteina viene scaricato il modello strutturale da AlphaFold DB (format
 
 - **Confidenza:** pLDDT medio, deviazione standard, frazione < 50 (disordine), frazione ≥ 90 (ben ripiegata), pLDDT dei 30 residui N-terminali e C-terminali
 - **Compattezza:** raggio di girazione normalizzato per la lunghezza (globulare vs esteso)
-- **Forma:** anisotropia e asfericitità del tensore di girazione (formula canonica Theodorou-Suter 1985)
+- **Forma:** anisotropia e asfericitià del tensore di girazione (formula canonica Theodorou-Suter 1985)
 - **Complessità:** densità di contatti Cα-Cα (< 8 Å, sep ≥ 3) e ordine di contatto relativo
 - **Disordine:** frazione del tratto disordinato più lungo
 
@@ -201,7 +201,7 @@ data/alphafold/ # Strutture CIF scaricate da AlphaFold DB
 
 ### Prerequisiti
 
-```bash
+```
 Python >= 3.11
 CUDA >= 11.8 (opzionale ma fortemente consigliato; la CPU è supportata)
 RAM >= 16 GB
@@ -220,7 +220,7 @@ pip install matplotlib scipy psutil
 
 ### Esecuzione
 
-Il progetto è strutturato in due notebook Jupyter da eseguire in sequenza:
+Il progetto è strutturato in due notebook Jupyter da eseguire in sequenza.
 
 **Passo 1 — Preparazione dei dati**
 
