@@ -1,0 +1,21 @@
+# NeuroLoc-Δ · Python ≥ 3.11 (testato fino a 3.14)
+numpy>=1.26
+pandas>=2.1
+pyarrow>=14            # parquet
+scipy>=1.11
+scikit-learn>=1.4
+matplotlib>=3.8
+torch>=2.1             # con CUDA per lo 02 (vedi pytorch.org per la versione giusta della scheda)
+transformers>=4.40     # ESM-2, ProtT5, PubMedBERT
+sentencepiece          # tokenizer di ProtT5
+biopython>=1.83        # 02, sezione 4: allineamenti locali per l'omologia
+openpyxl>=3.1          # SynGO .xlsx e uscite Excel
+xlrd>=2.0              # MitoCarta .xls
+lxml>=5.0
+requests>=2.31
+urllib3
+pyyaml                 # 03, sezione 12: etichette del test HOU
+psutil
+tqdm
+ipywidgets>=8          # barre di avanzamento nel notebook
+jupyter
