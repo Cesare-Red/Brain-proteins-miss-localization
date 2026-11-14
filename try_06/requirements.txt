@@ -1,0 +1,23 @@
+# NeuroLoc-Δ · ambiente dell'esecuzione di riferimento: Python 3.14.4
+# Le quattro librerie da cui dipendono i numeri sono fissate alla versione usata; dopo l'esecuzione di riferimento salva
+# l'ambiente intero con:  pip freeze > requirements.lock.txt  (e metti il file nel repository)
+torch==2.15.*           # con CUDA per lo 02 (vedi pytorch.org per la build giusta della scheda)
+transformers==5.22.*    # ESM-2, ProtT5, PubMedBERT
+pandas==3.1.*
+scikit-learn>=1.9,<1.11 # lo 01 usa SVC(probability=True), deprecato dalla 1.9 e tolto dalla 1.11 (vedi la cella LOPIT)
+numpy>=2.1
+scipy>=1.14
+pyarrow>=18             # parquet
+matplotlib>=3.9
+sentencepiece           # tokenizer di ProtT5
+biopython>=1.83         # 02, sezione 4: allineamenti locali per l'omologia
+openpyxl>=3.1           # SynGO .xlsx e uscite Excel
+xlrd>=2.0               # MitoCarta .xls
+lxml>=5.0
+requests>=2.31
+urllib3
+pyyaml                  # 03, sezione 12: etichette del test HOU
+psutil
+tqdm
+ipywidgets>=8           # barre di avanzamento nel notebook
+jupyter
