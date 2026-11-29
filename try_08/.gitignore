@@ -1,0 +1,13 @@
+# scaricati e rigenerati dai notebook
+cache/
+data/*
+!data/esterni/
+!data/versioni_dati.csv
+tmp/
+# in data/esterni/ si tengono i file messi a mano
+
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
